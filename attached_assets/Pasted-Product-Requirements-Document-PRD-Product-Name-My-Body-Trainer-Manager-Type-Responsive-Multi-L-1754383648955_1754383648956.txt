@@ -1,0 +1,116 @@
+Product Requirements Document (PRD)
+Product Name: My Body Trainer Manager
+Type: Responsive Multi-Lingual Web Application
+Supported Languages: English, Spanish, French, Portuguese
+
+________________________________________
+1. Overview
+Goal:
+To create a responsive, multi-lingual web application that allows personal trainers to manage their clients, provide tailored training plans, monitor progress, and communicate directly. It includes client-side features for tracking workouts and inputting evaluations, and an overarching SuperAdmin system to manage trainers.
+________________________________________
+2. User Roles and Permissions
+Role	Description	Key Access Points
+SuperAdmin	Manages trainer accounts and system oversight	Admin dashboard, trainer account management
+Trainer	Provides coaching, manages clients & content	Trainer dashboard, chat, plans, clients, reports
+Client	Follows workout plans and tracks progress	Client dashboard, training plan, evaluations
+________________________________________
+3. Key Features & Functional Requirements
+🔐 Account Management
+SuperAdmin:
+•	Default account created at system launch
+•	Approves/denies trainer registrations
+•	Can activate/deactivate/reset trainer accounts
+•	View analytics on:
+o	Total trainers / active trainers
+o	Total clients per trainer
+o	Total monthly revenue
+Trainer:
+•	Registers with required information
+•	Pending status until SuperAdmin approval/payment
+•	Dashboard-only access with chat to SuperAdmin during review
+Client:
+•	Registers using referral code from trainer
+•	Account linked automatically to trainer
+•	Trainer receives notification on new client
+________________________________________
+💬 Communication Module
+•	Secure chat system:
+o	Trainer ↔ Client (1:1)
+o	Trainer ↔ SuperAdmin (if account is pending)
+o	Group chats or topic discussions (optional enhancement)
+________________________________________
+4. Feature Set by User Role
+🔸 Trainer Portal
+1. Dashboard
+•	Total clients
+•	Active clients
+•	Monthly revenue
+•	Notifications for new clients
+•	Charts: growth, performance, client progress
+2. Profile
+•	Editable info: Name, Expertise, Gallery, Experience
+•	Auto-generated referral code
+3. Clients
+•	View clients list with details:
+o	Registration date
+o	Payment plan and status
+o	Progress history (charts, percentages)
+•	Assign/update training plans
+•	Activate/deactivate clients
+4. Training Plans
+•	Create/edit plans:
+o	General goal
+o	Daily/weekly workout routines
+o	Exercises with reps/sets
+o	Diet & calorie intake suggestions
+•	Assign plans to clients
+5. Exercises
+•	Add/edit exercise library:
+o	Name, description
+o	Media: photo, PDF, video
+•	Linkable to plans
+6. Posts
+•	Publish motivational or educational posts:
+o	Memes, text, images, videos
+o	Visible to assigned clients
+7. Reports
+•	Generate insights:
+o	Best/worst performing clients
+o	New registrations (by day/month)
+o	Source of referrals
+o	Revenue growth trends
+________________________________________
+🔸 Client Portal
+1. Dashboard
+•	Status summary
+•	Notifications
+•	Today's workout plan
+2. Profile
+•	Editable info:
+o	Name, age, height, weight
+o	Body goal
+o	Referral source
+•	Performance stats:
+o	Bench Press, Deadlift, Shoulder Press, etc.
+3. Trainer View
+•	Public trainer profile
+•	Photo gallery, motivational content
+4. Training Plan
+•	Assigned plan breakdown
+•	Exercises with media and descriptions
+•	Diet/calorie targets
+5. Daily Workout
+•	Daily checklist of assigned activities
+•	Reps/sets overview
+•	Timer tool
+6. Monthly Evaluation
+•	Progress tracking input:
+o	Measurements (cm): waist, abdomen, hips, chest, thigh, calf, biceps
+o	Adherence scoring: training, meal, cardio (1–10)
+o	Week #, weight change, body fat %, age, height
+o	Self-evaluation scale (1–10)
+7. Evolution Charts
+•	Visual display of:
+o	Overall evolution score
+o	Measurement graphs
+o	Exercise performance over time
