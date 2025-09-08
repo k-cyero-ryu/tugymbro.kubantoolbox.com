@@ -12,6 +12,8 @@ A comprehensive, multi-lingual web application that connects personal trainers w
 - **Visual Intelligence**: T-pose photo analysis for body measurements
 - **File Management**: Secure file upload and storage for exercise media
 - **Responsive Design**: Mobile-friendly interface with modern UI components
+- **Password Reset**: SuperAdmin can reset passwords for any user
+- **User Management**: Comprehensive user administration tools
 
 ## 🛠 Tech Stack
 
@@ -19,7 +21,7 @@ A comprehensive, multi-lingual web application that connects personal trainers w
 - **Backend**: Node.js + Express.js + TypeScript
 - **Database**: PostgreSQL (Neon Serverless)
 - **ORM**: Drizzle ORM
-- **Authentication**: Replit OIDC
+- **Authentication**: Username/Password with bcrypt hashing + Session-based authentication
 - **File Storage**: Google Cloud Storage
 - **UI Framework**: Tailwind CSS + shadcn/ui
 - **State Management**: TanStack Query (React Query)
@@ -29,8 +31,7 @@ A comprehensive, multi-lingual web application that connects personal trainers w
 
 - Node.js 18+ and npm
 - PostgreSQL database (local or cloud)
-- Google Cloud Storage bucket
-- Replit authentication setup (for Replit deployment)
+- Google Cloud Storage bucket (optional)
 
 ## 🔧 Installation
 
@@ -83,12 +84,10 @@ DATABASE_URL=postgresql://username:password@host:port/database_name
 # Session Configuration
 SESSION_SECRET=your_super_secret_session_key_here
 
-# Replit Authentication (required for Replit deployment)
-REPLIT_DOMAINS=your-domain.replit.app
-ISSUER_URL=https://replit.com/oidc
-REPL_ID=your-repl-id
+# SuperAdmin Setup Key (customize for security)
+SUPERADMIN_SETUP_KEY=your-secure-setup-key-2025
 
-# Google Cloud Storage (Object Storage)
+# Google Cloud Storage (Object Storage) - Optional
 DEFAULT_OBJECT_STORAGE_BUCKET_ID=your-bucket-id
 PUBLIC_OBJECT_SEARCH_PATHS=/your-bucket/public
 PRIVATE_OBJECT_DIR=/your-bucket/.private
@@ -108,8 +107,8 @@ PORT=5000
 
 - **DATABASE_URL**: Complete PostgreSQL connection string
 - **SESSION_SECRET**: Random string for session encryption (generate a strong random string)
-- **REPLIT_DOMAINS**: Your Replit app domain (only needed for Replit deployment)
-- **Object Storage**: Google Cloud Storage configuration for file uploads
+- **SUPERADMIN_SETUP_KEY**: Security key for creating the first SuperAdmin account
+- **Object Storage**: Google Cloud Storage configuration for file uploads (optional)
 - **PG* variables**: Individual PostgreSQL connection parameters
 
 ### 4. Database Schema Setup
@@ -122,34 +121,31 @@ npm run db:push
 
 This command will create all necessary tables in your database using Drizzle ORM.
 
-### 5. Creating the First Admin User (SuperAdmin Setup)
+### 5. Creating the First SuperAdmin Account
 
-After setting up the database schema, you need to create the first SuperAdmin user to manage the platform.
+After setting up the database schema, create your first SuperAdmin account to manage the platform.
 
-#### Prerequisites for Admin Setup
+#### SuperAdmin Registration
 
-1. **First, login to create your user account**:
-   - Start the application: `npm run dev`
-   - Visit `http://localhost:5000`
-   - Login using Replit authentication (this creates your user account in the database)
-   - Note down the email address you used to login
-
-#### Creating the SuperAdmin Account
+1. **Start the application**:
+   ```bash
+   npm run dev
+   ```
 
 2. **Access the SuperAdmin setup page**:
    - Navigate to: `http://localhost:5000/setup-superadmin`
-   - You'll see a SuperAdmin Setup form
 
-3. **Complete the setup form**:
-   - **Email Address**: Enter the exact email you used when logging in above
-   - **Setup Key**: Enter the setup key (default: `replit-fitness-admin-2025`)
-     - You can customize this by setting `SUPERADMIN_SETUP_KEY` in your `.env` file
+3. **Create your SuperAdmin account**:
+   - **First Name & Last Name**: Your full name
+   - **Username**: Choose a unique username (e.g., `admin` or `superadmin`)
+   - **Email**: Your email address
+   - **Password**: Create a strong password (minimum 8 characters)
+   - **Setup Key**: Enter your setup key from the environment variables
+     - Default: `your-secure-setup-key-2025` (customize in `.env` file)
+
+4. **Complete Registration**:
    - Click "Create SuperAdmin Account"
-
-4. **Login as SuperAdmin**:
-   - After successful setup, you'll be redirected to login
-   - Login with the same credentials you used before
-   - You now have SuperAdmin access to the entire platform
+   - You'll be automatically logged in with full platform access
 
 #### Setup Key Security
 
@@ -166,116 +162,35 @@ SUPERADMIN_SETUP_KEY=your-custom-secure-setup-key-here
 #### What SuperAdmins Can Do
 
 Once logged in as SuperAdmin, you can:
+- **User Management**: View, search, and reset passwords for any user
 - **Manage Trainers**: Approve, reject, or suspend trainer applications
 - **View All Data**: Access all clients, training plans, and exercises across the platform
 - **Manage Payment Plans**: Create and configure payment plans for trainers
 - **Platform Administration**: Monitor system statistics and user activity
-- **Promote Other Users**: Promote existing users to SuperAdmin role
+- **Password Reset**: Reset passwords for users who forgot their credentials
 
 #### Creating Additional SuperAdmins
 
 After the initial setup, existing SuperAdmins can promote other users:
-1. The user must first login to create their account
-2. Use the "Manage Trainers" section in the admin dashboard
-3. Use the promote functionality to grant SuperAdmin access
+1. Regular users can register normally through `/register`
+2. Use the "User Management" section in the admin dashboard
+3. Find the user and use the promote functionality to grant SuperAdmin access
 
-#### Troubleshooting Admin Setup
+#### Troubleshooting SuperAdmin Setup
 
 **Common Issues:**
 
-1. **"User not found" error**: 
-   - Make sure you've logged in at least once to create the user account
-   - Use the exact same email address
-
-2. **"Invalid setup key" error**:
+1. **"Invalid setup key" error**:
    - Check your `SUPERADMIN_SETUP_KEY` environment variable
-   - Default key is: `replit-fitness-admin-2025`
+   - Make sure it matches what you entered
 
-3. **"SuperAdmin already exists" error**:
+2. **"SuperAdmin already exists" error**:
    - The setup endpoint only works for the very first SuperAdmin
    - Use the promote user functionality from existing SuperAdmin account
 
-### 6. Create Test Users for Production (SQL Queries)
-
-To quickly set up test users for immediate production testing, run these SQL queries in your PostgreSQL database:
-
-```sql
--- Create required enums if they don't exist
-DO $$ BEGIN
-    CREATE TYPE user_role AS ENUM ('superadmin', 'trainer', 'client');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
-DO $$ BEGIN
-    CREATE TYPE user_status AS ENUM ('active', 'inactive', 'pending');
-EXCEPTION
-    WHEN duplicate_object THEN null;
-END $$;
-
--- Create test users
-INSERT INTO users (id, email, first_name, last_name, role, status, created_at, updated_at) 
-VALUES 
-    ('39363427', 'darkryuudan@gmail.com', 'Ronny', 'SuperAdmin', 'superadmin', 'active', NOW(), NOW()),
-    ('46005006', 'kuban.solutions@gmail.com', 'Test', 'Trainer', 'trainer', 'active', NOW(), NOW()),
-    ('client001', 'client.test@example.com', 'John', 'Client', 'client', 'active', NOW(), NOW())
-ON CONFLICT (id) DO NOTHING;
-
--- Create trainer profile for the trainer user
-INSERT INTO trainers (id, user_id, referral_code, expertise, experience, created_at, updated_at)
-VALUES 
-    (gen_random_uuid(), '46005006', 'TR240001', 'Weight Training & Nutrition', '5+ Years', NOW(), NOW())
-ON CONFLICT (user_id) DO NOTHING;
-
--- Create client profile linked to the trainer
-INSERT INTO clients (id, user_id, trainer_id, phone, age, height, weight, current_weight, target_weight, body_goal, activity_level, created_at, updated_at)
-SELECT 
-    gen_random_uuid(), 
-    'client001', 
-    t.id, 
-    '+1-555-0123', 
-    28, 
-    175.00, 
-    80.00, 
-    80.00, 
-    75.00, 
-    'Build lean muscle and improve overall fitness', 
-    'moderate',
-    NOW(), 
-    NOW()
-FROM trainers t 
-WHERE t.user_id = '46005006'
-ON CONFLICT (user_id) DO NOTHING;
-```
-
-**What these queries create:**
-
-1. **SuperAdmin Account** (`darkryuudan@gmail.com`)
-   - Full admin access to manage trainers and system settings
-   - Can approve/reject trainer applications
-
-2. **Trainer Account** (`kuban.solutions@gmail.com`) 
-   - Referral code: `TR240001`
-   - Can create training plans and manage clients
-   - Has expertise in weight training & nutrition
-
-3. **Client Account** (`client.test@example.com`)
-   - Linked to the trainer account
-   - Sample fitness profile with goals and measurements
-   - Can view training plans and track progress
-
-**After running these queries:**
-- You can immediately test all three user roles
-- The client-trainer relationship is pre-configured
-- All accounts are active and ready for testing
-
-### 7. Google Cloud Storage Setup (Optional)
-
-For file upload functionality:
-
-1. Create a Google Cloud Storage bucket
-2. Set up appropriate IAM permissions
-3. Configure the bucket ID and paths in your environment variables
+3. **Username/email already exists**:
+   - Choose a different username
+   - Make sure email is unique in the system
 
 ## 🚦 Running the Application
 
@@ -305,19 +220,25 @@ npm start
 - `npm run check` - TypeScript type checking
 - `npm run db:push` - Push database schema changes
 
-## 🔐 Authentication Setup
+## 🔐 Authentication System
 
-### For Replit Deployment
+### Username/Password Authentication
 
-The application uses Replit's OIDC authentication. When deploying on Replit:
+The application uses a secure username/password authentication system:
 
-1. Set `REPLIT_DOMAINS` to your Replit app domain
-2. `REPL_ID` is automatically provided by Replit
-3. `ISSUER_URL` should be `https://replit.com/oidc`
+- **Password Security**: Passwords are hashed using bcrypt with 12 salt rounds
+- **Session Management**: Secure HTTP-only cookies with PostgreSQL session storage
+- **Role-Based Access**: Three-tier permission system (SuperAdmin, Trainer, Client)
+- **Password Reset**: SuperAdmins can reset passwords for any user
+- **Account Status**: Users can be active, inactive, or pending approval
 
-### For Custom Deployment
+### User Registration Flow
 
-For non-Replit deployments, you'll need to modify the authentication system in `server/replitAuth.ts` to use your preferred authentication provider.
+1. **New Users**: Can register through `/register`
+2. **Role Selection**: Choose between Trainer or Client during registration
+3. **Trainer Approval**: Trainer accounts require SuperAdmin approval
+4. **Client Assignment**: Clients can enter referral codes to be assigned to trainers
+5. **Automatic Login**: Users are automatically logged in after successful registration
 
 ## 📁 Project Structure
 
@@ -334,7 +255,7 @@ For non-Replit deployments, you'll need to modify the authentication system in `
 │   ├── db.ts              # Database connection
 │   ├── routes.ts          # API routes
 │   ├── storage.ts         # Data access layer
-│   ├── replitAuth.ts      # Authentication setup
+│   ├── auth.ts            # Authentication system
 │   ├── objectStorage.ts   # File storage service
 │   └── index.ts           # Server entry point
 ├── shared/                 # Shared types and schemas
@@ -364,14 +285,40 @@ To change your database connection:
 
 The database schema is defined in `shared/schema.ts` using Drizzle ORM. Key tables include:
 
-- `users` - User accounts and authentication
-- `trainers` - Trainer profiles and information
-- `clients` - Client profiles and data
+- `users` - User accounts and authentication (username, password, role, status)
+- `trainers` - Trainer profiles and referral codes
+- `clients` - Client profiles and trainer assignments
 - `training_plans` - Workout plans and routines
 - `exercises` - Exercise library and media
 - `evaluations` - Progress tracking and assessments
 - `chat_messages` - Real-time messaging
 - `sessions` - User session storage
+
+## 👥 User Roles & Permissions
+
+### SuperAdmin
+- Full platform access and control
+- User management (view, search, password reset)
+- Trainer approval/rejection/suspension
+- Payment plan management
+- System statistics and monitoring
+- Platform administration
+
+### Trainer
+- Client management and assignment
+- Training plan creation and management
+- Exercise library management
+- Progress tracking and evaluations
+- Real-time chat with clients
+- Revenue and payment tracking
+
+### Client
+- View assigned training plans
+- Daily workout tracking
+- Progress monitoring and evaluations
+- Real-time chat with trainer
+- Profile management
+- Goal setting and tracking
 
 ## 🔧 Production Deployment
 
@@ -379,9 +326,9 @@ The database schema is defined in `shared/schema.ts` using Drizzle ORM. Key tabl
 
 1. Set `NODE_ENV=production`
 2. Configure production database URL
-3. Set up Google Cloud Storage for file uploads
-4. Configure domain and authentication settings
-5. Ensure all security environment variables are set
+3. Set up Google Cloud Storage for file uploads (optional)
+4. Set strong `SESSION_SECRET` and `SUPERADMIN_SETUP_KEY`
+5. Configure domain settings
 
 ### Build Process
 
@@ -403,9 +350,9 @@ The application serves on port 5000 by default. In production, set the `PORT` en
    - Check firewall settings
 
 2. **Authentication Issues**
-   - Verify Replit environment variables
    - Check `SESSION_SECRET` is set
-   - Ensure domain configuration is correct
+   - Verify password meets minimum requirements
+   - Ensure user status is 'active'
 
 3. **File Upload Problems**
    - Verify Google Cloud Storage configuration
@@ -416,6 +363,11 @@ The application serves on port 5000 by default. In production, set the `PORT` en
    - Run `npm run check` for TypeScript errors
    - Ensure all dependencies are installed
    - Check Node.js version compatibility
+
+5. **SuperAdmin Setup Issues**
+   - Verify `SUPERADMIN_SETUP_KEY` environment variable
+   - Ensure no SuperAdmin already exists in the database
+   - Check database connectivity
 
 ### Debug Mode
 

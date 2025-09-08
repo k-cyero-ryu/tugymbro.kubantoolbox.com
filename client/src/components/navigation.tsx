@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 import LanguageSelector from "@/components/language-selector";
 
 export default function Navigation() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -108,6 +108,12 @@ export default function Navigation() {
       roles: ['superadmin']
     },
     { 
+      href: '/user-management', 
+      label: 'User Management', 
+      icon: UserCog,
+      roles: ['superadmin']
+    },
+    { 
       href: '/clients', 
       label: 'My Clients', 
       icon: Users,
@@ -160,12 +166,6 @@ export default function Navigation() {
       label: 'Reports', 
       icon: BarChart3,
       roles: ['trainer']
-    },
-    { 
-      href: '/chat', 
-      label: 'Chat', 
-      icon: MessageCircle,
-      roles: ['superadmin', 'trainer', 'client']
     }
   ].filter(item => item.roles.includes(userRole));
 
@@ -313,7 +313,7 @@ export default function Navigation() {
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => window.location.href = '/api/logout'}>
+                  <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Log out
                   </DropdownMenuItem>

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { insertTrainerSchema, insertClientSchema, insertTrainingPlanSchema, insertExerciseSchema, insertPostSchema, insertChatMessageSchema, insertClientPlanSchema, insertMonthlyEvaluationSchema, insertPaymentPlanSchema, insertClientPaymentPlanSchema, paymentPlans, clientPaymentPlans, type User } from "@shared/schema";
@@ -18,40 +18,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      // Get additional user data based on role
-      let additionalData = {};
-      if (user.role === 'trainer') {
-        const trainer = await storage.getTrainerByUserId(userId);
-        if (trainer) {
-          additionalData = { trainer };
-        }
-      } else if (user.role === 'client') {
-        const client = await storage.getClientByUserId(userId);
-        if (client) {
-          additionalData = { client };
-        }
-      }
-      
-      res.json({ ...user, ...additionalData });
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+  // Auth routes are now handled in setupAuth
 
   // Role selection endpoint
   app.post('/api/users/select-role', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { role, trainerData, referralCode } = req.body;
 
       if (!['trainer', 'client'].includes(role)) {
@@ -118,7 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Superadmin management endpoint
   app.post('/api/admin/promote-superadmin', isAuthenticated, async (req: any, res) => {
     try {
-      const currentUserId = req.user.claims.sub;
+      const currentUserId = req.user.id;
       const currentUser = await storage.getUser(currentUserId);
       
       // Only existing superadmins can promote others
@@ -249,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Trainer routes
   app.post('/api/trainers', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainerData = insertTrainerSchema.parse(req.body);
       
       // Generate unique referral code
@@ -271,7 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current trainer's clients and referral info (MUST come before /:id routes)
   app.get('/api/trainers/clients', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       
       if (!trainer) {
@@ -313,7 +285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Current trainer profile with payment plan
   app.get('/api/trainers/profile', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       console.log('[DEBUG] Fetching trainer profile for user ID:', userId);
       
       const trainer = await storage.getTrainerByUserId(userId);
@@ -352,7 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Current trainer stats
   app.get('/api/trainers/stats', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       console.log('[DEBUG] Fetching trainer stats for user ID:', userId);
       
       const trainer = await storage.getTrainerByUserId(userId);
@@ -397,7 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Invite client by email (for trainers)
   app.post('/api/trainers/invite-client', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only approved trainers can invite clients" });
@@ -457,7 +429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client registration with referral code
   app.post('/api/clients/register', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { referralCode, ...clientData } = req.body;
       
       // Find trainer by referral code
@@ -483,7 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Training plan routes
   app.post('/api/training-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can create plans" });
@@ -516,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/training-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Check if user is trainer
       const trainer = await storage.getTrainerByUserId(userId);
@@ -563,7 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get single training plan by ID (accessible by both trainers and clients)
   app.get('/api/training-plans/:planId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { planId } = req.params;
       const plan = await storage.getTrainingPlan(planId);
       
@@ -609,7 +581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client-specific endpoints
   app.get('/api/client/assigned-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can access this endpoint" });
@@ -648,7 +620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/client/payment-plan', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can access this endpoint" });
@@ -669,7 +641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client profile endpoint
   app.get('/api/client/profile', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can access this endpoint" });
@@ -682,6 +654,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let trainer = null;
       if (client.trainerId) {
         trainer = await storage.getTrainer(client.trainerId);
+        if (trainer) {
+          // Fetch user details for the trainer
+          const trainerUser = await storage.getUser(trainer.userId);
+          if (trainerUser) {
+            // Include trainer user information in the trainer object
+            trainer = {
+              ...trainer,
+              firstName: trainerUser.firstName,
+              lastName: trainerUser.lastName,
+              email: trainerUser.email,
+              user: trainerUser
+            };
+          }
+        }
       }
       
       res.json({
@@ -698,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update client profile endpoint
   app.put('/api/client/profile', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can access this endpoint" });
@@ -757,7 +743,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/client/today-workout', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can access this endpoint" });
@@ -851,7 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Workout completion endpoints
   app.post('/api/client/complete-exercise', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can complete exercises" });
@@ -879,7 +865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/client/workout-logs', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can view workout logs" });
@@ -916,7 +902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Workout by date endpoint for Daily Workout page
   app.get('/api/client/workout-by-date', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can access workout data" });
@@ -1008,7 +994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete individual set endpoint
   app.post('/api/client/complete-set', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can complete sets" });
@@ -1053,7 +1039,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Uncheck/delete individual set endpoint
   app.delete('/api/client/uncheck-set', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can uncheck sets" });
@@ -1086,7 +1072,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save exercise notes independently endpoint - saves to set 1
   app.post('/api/client/save-exercise-notes', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can save exercise notes" });
@@ -1146,7 +1132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get weekly workout stats endpoint
   app.get('/api/client/weekly-stats', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can view workout stats" });
@@ -1208,7 +1194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get workout streak endpoint
   app.get('/api/client/workout-streak', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can view workout streak" });
@@ -1270,7 +1256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Complete entire exercise endpoint
   app.post('/api/client/complete-exercise-all-sets', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can complete exercises" });
@@ -1332,7 +1318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Exercise routes
   app.post('/api/exercises', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can create exercises" });
@@ -1353,7 +1339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/exercises', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       
       // Check if user is trainer
       const trainer = await storage.getTrainerByUserId(userId);
@@ -1383,7 +1369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/exercises/:id/media', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       if (!req.body.mediaURL) {
         return res.status(400).json({ error: "mediaURL is required" });
       }
@@ -1417,7 +1403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Endpoint for setting ACL policy on evaluation photos
   app.put('/api/evaluation-photos', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       if (!req.body.photoURL) {
         return res.status(400).json({ error: "photoURL is required" });
       }
@@ -1441,7 +1427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client plan assignment routes
   app.post('/api/client-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       
       if (!trainer) {
@@ -1484,7 +1470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get client plans (assigned training plans for a client)
   app.get('/api/client-plans/:clientId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       
       if (!trainer) {
@@ -1522,7 +1508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Monthly evaluation routes
   app.post('/api/evaluations', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const client = await storage.getClientByUserId(userId);
       if (!client) {
         return res.status(403).json({ message: "Only clients can submit evaluations" });
@@ -1551,7 +1537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get individual evaluation by ID
   app.get('/api/evaluations/:evaluationId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { evaluationId } = req.params;
 
       const evaluation = await storage.getMonthlyEvaluation(evaluationId);
@@ -1586,7 +1572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/evaluations', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { clientId } = req.query;
 
       // Check if user is a trainer accessing client evaluations
@@ -1621,7 +1607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Chat routes
   app.get('/api/chat/users', isAuthenticated, async (req: any, res) => {
     try {
-      const currentUserId = req.user.claims.sub;
+      const currentUserId = req.user.id;
       const currentUser = await storage.getUser(currentUserId);
       
       if (!currentUser) {
@@ -1651,7 +1637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/chat/messages/:receiverId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const messages = await storage.getChatMessages(userId, req.params.receiverId);
       res.json(messages);
     } catch (error) {
@@ -1662,7 +1648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/chat/messages', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const user = await storage.getUser(userId);
       console.log('Creating chat message:', { userId, body: req.body });
       
@@ -1736,7 +1722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes
   app.get('/api/admin/stats', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1749,9 +1735,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/admin/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.id);
+      if (user?.role !== 'superadmin') {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+      
+      const allUsers = await storage.getAllUsers();
+      // Remove password from response for security
+      const safeUsers = allUsers.map(({ password, ...user }) => user);
+      res.json(safeUsers);
+    } catch (error) {
+      console.error("Error fetching admin users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   app.get('/api/admin/pending-trainers', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1767,7 +1770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get approved trainers for admin
   app.get('/api/admin/approved-trainers', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1783,7 +1786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Approve trainer
   app.post('/api/admin/approve-trainer/:trainerId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1805,7 +1808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reject trainer
   app.post('/api/admin/reject-trainer/:trainerId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1822,7 +1825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Suspend trainer
   app.post('/api/admin/suspend-trainer/:trainerId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1839,7 +1842,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all trainers with details for admin management
   app.get('/api/admin/trainers', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1855,7 +1858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update trainer payment plan (SuperAdmin only)
   app.put('/api/admin/trainers/:trainerId/payment-plan', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1874,7 +1877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update trainer status (SuperAdmin only)
   app.put('/api/admin/trainers/:trainerId/status', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1893,7 +1896,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin view all clients
   app.get('/api/admin/clients', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1910,7 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin view all training plans
   app.get('/api/admin/training-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1927,7 +1930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Payment Plans API routes
   app.get('/api/payment-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1952,7 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/payment-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1968,7 +1971,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/payment-plans/:planId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -1985,7 +1988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/payment-plans/:planId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -2002,7 +2005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client payment plan routes (for trainers to manage client payment plans)
   app.get('/api/client-payment-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can access client payment plans" });
@@ -2019,7 +2022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get a specific client payment plan by ID
   app.get('/api/client-payment-plans/:planId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can access client payment plans" });
@@ -2041,7 +2044,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/client-payment-plans', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can create client payment plans" });
@@ -2061,7 +2064,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/client-payment-plans/:planId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can update client payment plans" });
@@ -2086,7 +2089,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/client-payment-plans/:planId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can delete client payment plans" });
@@ -2111,7 +2114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Assign client payment plan to client
   app.put('/api/clients/:clientId/payment-plan', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const trainer = await storage.getTrainerByUserId(userId);
       if (!trainer) {
         return res.status(403).json({ message: "Only trainers can assign client payment plans" });
@@ -2145,7 +2148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin view all exercises
   app.get('/api/admin/exercises', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'superadmin') {
         return res.status(403).json({ message: "Admin access required" });
       }
@@ -2188,7 +2191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get individual client details for trainer
   app.get('/api/clients/:clientId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'trainer') {
         return res.status(403).json({ message: "Trainer access required" });
       }
@@ -2201,7 +2204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify client belongs to this trainer
-      const trainer = await storage.getTrainerByUserId(req.user.claims.sub);
+      const trainer = await storage.getTrainerByUserId(req.user.id);
       if (!trainer || client.trainerId !== trainer.id) {
         return res.status(403).json({ message: "Client not found" });
       }
@@ -2230,7 +2233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Suspend client
   app.post('/api/clients/:clientId/suspend', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'trainer') {
         return res.status(403).json({ message: "Trainer access required" });
       }
@@ -2243,7 +2246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify client belongs to this trainer
-      const trainer = await storage.getTrainerByUserId(req.user.claims.sub);
+      const trainer = await storage.getTrainerByUserId(req.user.id);
       if (!trainer || client.trainerId !== trainer.id) {
         return res.status(403).json({ message: "Client not found" });
       }
@@ -2259,7 +2262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Reactivate client
   app.post('/api/clients/:clientId/reactivate', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'trainer') {
         return res.status(403).json({ message: "Trainer access required" });
       }
@@ -2272,7 +2275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify client belongs to this trainer
-      const trainer = await storage.getTrainerByUserId(req.user.claims.sub);
+      const trainer = await storage.getTrainerByUserId(req.user.id);
       if (!trainer || client.trainerId !== trainer.id) {
         return res.status(403).json({ message: "Client not found" });
       }
@@ -2289,7 +2292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update client payment plan
   app.put('/api/clients/:clientId/payment-plan', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'trainer') {
         return res.status(403).json({ message: "Trainer access required" });
       }
@@ -2303,7 +2306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify client belongs to this trainer
-      const trainer = await storage.getTrainerByUserId(req.user.claims.sub);
+      const trainer = await storage.getTrainerByUserId(req.user.id);
       if (!trainer || client.trainerId !== trainer.id) {
         return res.status(403).json({ message: "Client not found" });
       }
@@ -2326,7 +2329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/clients/:clientId', isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const user = await storage.getUser(req.user.id);
       if (user?.role !== 'trainer') {
         return res.status(403).json({ message: "Trainer access required" });
       }
@@ -2339,7 +2342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify client belongs to this trainer
-      const trainer = await storage.getTrainerByUserId(req.user.claims.sub);
+      const trainer = await storage.getTrainerByUserId(req.user.id);
       if (!trainer || client.trainerId !== trainer.id) {
         return res.status(403).json({ message: "Client not found" });
       }

@@ -11,6 +11,8 @@ import { MessageCircle, X, Clock, HelpCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
+import Login from "@/pages/login";
+import Register from "@/pages/register";
 import RoleSelection from "@/pages/role-selection";
 import SuperAdminSetup from "@/pages/superadmin-setup";
 import ClientRegistration from "@/pages/client-registration";
@@ -21,6 +23,7 @@ import ManageTrainersPage from "@/pages/manage-trainers";
 import AdminClients from "@/pages/admin-clients";
 import AdminPlans from "@/pages/admin-plans";
 import AdminExercises from "@/pages/admin-exercises";
+import UserManagement from "@/pages/user-management";
 import Clients from "@/pages/clients";
 import ClientDetail from "@/pages/client-detail";
 import EditClient from "@/pages/edit-client";
@@ -56,7 +59,20 @@ function Router() {
   }
 
   if (!isAuthenticated) {
-    return <Landing />;
+    return (
+      <Switch>
+        <Route path="/login" component={Login} />
+        <Route path="/register" component={Register} />
+        <Route path="/" component={Landing} />
+        <Route path="*">
+          {/* Redirect any other path to login for unauthenticated users */}
+          {() => { 
+            window.location.href = '/login';
+            return null;
+          }}
+        </Route>
+      </Switch>
+    );
   }
 
   // If user is authenticated but has default 'client' role and no associated records, show role selection
@@ -172,6 +188,7 @@ function Router() {
                   <Route path="/admin-plans" component={AdminPlans} />
                   <Route path="/admin-exercises" component={AdminExercises} />
                   <Route path="/payment-plans" component={PaymentPlans} />
+                  <Route path="/user-management" component={UserManagement} />
                 </>
               )}
               {user?.role === 'trainer' && (

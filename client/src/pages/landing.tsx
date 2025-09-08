@@ -14,13 +14,25 @@ export default function Landing() {
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
             The complete fitness management platform connecting trainers with clients through personalized training plans, progress tracking, and real-time communication.
           </p>
-          <Button 
-            size="lg" 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3"
-            onClick={() => window.location.href = '/api/login'}
-          >
-            Get Started
-          </Button>
+          <div className="space-x-4">
+            <Button 
+              size="lg" 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3"
+              onClick={() => window.location.href = '/login'}
+              data-testid="button-login"
+            >
+              Sign In
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="px-8 py-3"
+              onClick={() => window.location.href = '/register'}
+              data-testid="button-register"
+            >
+              Sign Up
+            </Button>
+          </div>
         </div>
 
         {/* Features Grid */}

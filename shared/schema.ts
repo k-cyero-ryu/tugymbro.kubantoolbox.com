@@ -31,10 +31,12 @@ export const userRoleEnum = pgEnum('user_role', ['superadmin', 'trainer', 'clien
 // User status enum
 export const userStatusEnum = pgEnum('user_status', ['active', 'inactive', 'pending']);
 
-// Users table (required for Replit Auth)
+// Users table (with username/password authentication)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  username: varchar("username").unique().notNull(),
+  email: varchar("email").unique().notNull(),
+  password: varchar("password").notNull(), // hashed password
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -332,6 +334,18 @@ export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
+export const registerUserSchema = insertUserSchema.extend({
+  confirmPassword: z.string().min(8),
+  referralCode: z.string().optional(),
+  setupKey: z.string().optional(), // Required only for SuperAdmin registration
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+export const loginUserSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
 export const insertTrainerSchema = createInsertSchema(trainers).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTrainingPlanSchema = createInsertSchema(trainingPlans).omit({ id: true, createdAt: true, updatedAt: true }).extend({
@@ -361,6 +375,8 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ i
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type RegisterUser = z.infer<typeof registerUserSchema>;
+export type LoginUser = z.infer<typeof loginUserSchema>;
 export type InsertTrainer = z.infer<typeof insertTrainerSchema>;
 export type Trainer = typeof trainers.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
