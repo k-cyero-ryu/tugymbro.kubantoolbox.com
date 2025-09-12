@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from 'react-i18next';
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { Bus, CheckCircle, Users, DollarSign, Eye } from "lucide-react";
 export default function AdminDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -49,8 +51,8 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600">You don't have permission to access this page.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('auth.accessDenied')}</h1>
+          <p className="text-gray-600">{t('admin.noPermission')}</p>
         </div>
       </div>
     );
@@ -60,8 +62,8 @@ export default function AdminDashboard() {
     <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
       {/* Dashboard Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">SuperAdmin Dashboard</h1>
-        <p className="text-gray-600 mt-2">System overview and trainer management</p>
+        <h1 className="text-3xl font-bold text-gray-900">{t('admin.dashboard')}</h1>
+        <p className="text-gray-600 mt-2">{t('admin.systemOverview')}</p>
       </div>
 
       {/* Admin Stats */}

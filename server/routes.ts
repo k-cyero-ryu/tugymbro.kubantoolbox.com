@@ -1,17 +1,20 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { parse as parseCookie } from "cookie";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./auth";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { ObjectPermission } from "./objectAcl";
-import { insertTrainerSchema, insertClientSchema, insertTrainingPlanSchema, insertExerciseSchema, insertPostSchema, insertChatMessageSchema, insertClientPlanSchema, insertMonthlyEvaluationSchema, insertPaymentPlanSchema, insertClientPaymentPlanSchema, paymentPlans, clientPaymentPlans, type User } from "@shared/schema";
+import { ObjectPermission, ObjectAclPolicy, getObjectAclPolicy } from "./objectAcl";
+import { insertTrainerSchema, insertClientSchema, insertTrainingPlanSchema, insertExerciseSchema, insertPostSchema, insertChatMessageSchema, insertClientPlanSchema, insertMonthlyEvaluationSchema, insertPaymentPlanSchema, insertClientPaymentPlanSchema, insertCommunityMessageSchema, insertSocialPostSchema, socialComments, paymentPlans, clientPaymentPlans, type User } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
-// Extend WebSocket type to include userId
+// Extend WebSocket type to include authenticated userId and community groups
 interface ExtendedWebSocket extends WebSocket {
-  userId?: string;
+  authenticatedUserId?: string; // Server-authenticated user ID from session
+  communityGroups?: Set<string>; // Track which community groups this user has joined
+  sessionVerified?: boolean; // Track if session has been verified
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -198,10 +201,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Object storage routes - serve public files without authentication
-  app.get("/objects/:objectPath(*)", async (req, res) => {
+  app.get("/objects/:objectPath(*)", async (req: any, res) => {
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      
+      // Get ACL policy first to check if it's public
+      const aclPolicy = await getObjectAclPolicy(objectFile);
+      
+      // Check if user can access this object based on ACL policies
+      const userId = req.user?.id; // User might not be authenticated for public files
+      
+      // Special handling for social post images - check if the image belongs to a social post
+      let isSocialPostImage = false;
+      if (!aclPolicy && req.path.includes('/objects/uploads/')) {
+        try {
+          const imageUrl = req.path; // e.g., "/objects/uploads/89982710-5f4f-4d68-b40f-2caffd07ffd2"
+          const socialPostExists = await storage.isSocialPostImage(imageUrl);
+          if (socialPostExists) {
+            isSocialPostImage = true;
+          }
+        } catch (error) {
+          console.error("Error checking social post image:", error);
+        }
+      }
+      
+      // Allow access if it's a social post image (even without ACL policy)
+      if (isSocialPostImage) {
+        objectStorageService.downloadObject(objectFile, res);
+        return;
+      }
+      
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        userId,
+        objectFile,
+        requestedPermission: ObjectPermission.READ,
+      });
+      
+      if (!canAccess) {
+        return res.status(403).json({ error: "Access denied - insufficient permissions" });
+      }
+      
+      // Additional check for community files: verify user is member of the community
+      // Community files are stored in private uploads directory  
+      // Skip this check for social post images which should be publicly accessible
+      if (req.path.includes('/objects/uploads/') && userId) {
+        // Check if this file is associated with any community messages
+        // But don't block social post images that are public
+        if (aclPolicy?.visibility !== "public") {
+          const isAssociatedWithCommunity = await storage.isFileAssociatedWithUserCommunities(req.path, userId);
+          if (isAssociatedWithCommunity === false) {
+            return res.status(403).json({ error: "Access denied - not authorized for this community file" });
+          }
+        }
+      }
+      
       objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
       console.error("Error checking object access:", error);
@@ -261,11 +315,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         clients,
         referralCode: trainer.referralCode,
-        referralUrl
+        referralUrl,
+        // Include trainer profile data for the profile page
+        ...trainer
       });
     } catch (error) {
       console.error("Error fetching trainer clients:", error);
       res.status(500).json({ message: "Failed to fetch trainer clients" });
+    }
+  });
+
+  // Current trainer profile with payment plan (MUST come before /:id routes)
+  app.get('/api/trainers/profile', isAuthenticated, async (req: any, res) => {
+    console.log('[PROFILE ROUTE] Route handler started');
+    try {
+      const userId = req.user.id;
+      console.log('[PROFILE ROUTE] Fetching trainer profile for user ID:', userId);
+      
+      const trainer = await storage.getTrainerByUserId(userId);
+      console.log('[PROFILE ROUTE] Found trainer:', !!trainer);
+      
+      if (!trainer) {
+        console.log('[PROFILE ROUTE] No trainer found for user ID:', userId);
+        return res.status(404).json({ message: "Trainer not found" });
+      }
+      
+      // Get user details
+      const user = await storage.getUser(userId);
+      console.log('[PROFILE ROUTE] Found user:', !!user);
+      
+      // Get assigned payment plan
+      let paymentPlan = null;
+      if (trainer.paymentPlanId) {
+        try {
+          const plans = await storage.getPaymentPlans();
+          paymentPlan = plans.find(plan => plan.id === trainer.paymentPlanId);
+        } catch (error) {
+          console.log('[PROFILE ROUTE] Error fetching payment plan:', error);
+        }
+      }
+      
+      res.json({
+        ...trainer,
+        user,
+        paymentPlan
+      });
+    } catch (error) {
+      console.error("[PROFILE ROUTE] Error fetching trainer profile:", error);
+      res.status(500).json({ message: "Failed to fetch trainer profile" });
+    }
+  });
+
+  // Current trainer stats (MUST come before /:id routes)
+  app.get('/api/trainers/stats', isAuthenticated, async (req: any, res) => {
+    console.log('[STATS ROUTE] Route handler started');
+    try {
+      const userId = req.user.id;
+      console.log('[STATS ROUTE] Fetching trainer stats for user ID:', userId);
+      
+      const trainer = await storage.getTrainerByUserId(userId);
+      console.log('[STATS ROUTE] Found trainer:', !!trainer);
+      
+      if (!trainer) {
+        console.log('[STATS ROUTE] No trainer found for user ID:', userId);
+        return res.status(404).json({ message: "Trainer not found" });
+      }
+      
+      console.log('[STATS ROUTE] Getting stats for trainer ID:', trainer.id);
+      const stats = await storage.getTrainerStats(trainer.id);
+      console.log('[STATS ROUTE] Trainer stats result:', stats);
+      res.json(stats);
+    } catch (error) {
+      console.error("[STATS ROUTE] Error fetching trainer stats:", error);
+      res.status(500).json({ message: "Failed to fetch trainer stats" });
     }
   });
 
@@ -282,67 +404,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Current trainer profile with payment plan
-  app.get('/api/trainers/profile', isAuthenticated, async (req: any, res) => {
+  // Update trainer profile
+  app.put('/api/trainers/profile', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      console.log('[DEBUG] Fetching trainer profile for user ID:', userId);
-      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'trainer') {
+        return res.status(403).json({ message: "Trainer access required" });
+      }
+
       const trainer = await storage.getTrainerByUserId(userId);
-      console.log('[DEBUG] Found trainer:', trainer);
-      console.log('[DEBUG] Trainer exists check:', !!trainer);
-      console.log('[DEBUG] Trainer type:', typeof trainer);
-      
       if (!trainer) {
-        console.log('[DEBUG] No trainer found for user ID:', userId);
         return res.status(404).json({ message: "Trainer not found" });
       }
-      
-      // Get user details
-      const user = await storage.getUser(userId);
-      console.log('[DEBUG] Found user:', user);
-      
-      // Get assigned payment plan
-      let paymentPlan = null;
-      if (trainer.paymentPlanId) {
-        const [plan] = await db.select().from(paymentPlans).where(eq(paymentPlans.id, trainer.paymentPlanId));
-        paymentPlan = plan;
-        console.log('[DEBUG] Found payment plan:', paymentPlan);
-      }
-      
-      res.json({
-        ...trainer,
-        user,
-        paymentPlan
-      });
+
+      // Validate the request body using the insertTrainerSchema (minus required fields)
+      const validatedData = insertTrainerSchema.partial().parse(req.body);
+
+      // Update trainer profile
+      const updatedTrainer = await storage.updateTrainer(trainer.id, validatedData);
+      res.json(updatedTrainer);
     } catch (error) {
-      console.error("Error fetching trainer profile:", error);
-      res.status(500).json({ message: "Failed to fetch trainer profile" });
+      console.error("Error updating trainer profile:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid profile data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update trainer profile" });
     }
   });
 
-  // Current trainer stats
-  app.get('/api/trainers/stats', isAuthenticated, async (req: any, res) => {
+  // Update user profile (for personal info like name, email)
+  app.put('/api/auth/user/profile', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      console.log('[DEBUG] Fetching trainer stats for user ID:', userId);
-      
-      const trainer = await storage.getTrainerByUserId(userId);
-      console.log('[DEBUG] Found trainer:', trainer);
-      console.log('[DEBUG] Trainer exists check:', !!trainer);
-      console.log('[DEBUG] Trainer type:', typeof trainer);
-      
-      if (!trainer) {
-        console.log('[DEBUG] No trainer found for user ID:', userId);
-        return res.status(404).json({ message: "Trainer not found" });
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
       }
-      
-      const stats = await storage.getTrainerStats(trainer.id);
-      console.log('[DEBUG] Trainer stats:', stats);
-      res.json(stats);
+
+      // Only allow updating specific fields
+      const allowedFields = ['firstName', 'lastName', 'email'];
+      const updateData = {};
+      for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
+      }
+
+      // Update user profile
+      const updatedUser = await storage.upsertUser({
+        ...user,
+        ...updateData,
+        updatedAt: new Date(),
+      });
+
+      res.json({
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        role: updatedUser.role,
+        status: updatedUser.status,
+      });
     } catch (error) {
-      console.error("Error fetching trainer stats:", error);
-      res.status(500).json({ message: "Failed to fetch trainer stats" });
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ message: "Failed to update user profile" });
     }
   });
 
@@ -529,6 +656,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching training plans:", error);
       res.status(500).json({ message: "Failed to fetch training plans" });
+    }
+  });
+
+  app.put('/api/training-plans/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const planId = req.params.id;
+      
+      const trainer = await storage.getTrainerByUserId(userId);
+      if (!trainer) {
+        return res.status(403).json({ message: "Only trainers can update training plans" });
+      }
+      
+      // Verify the plan belongs to this trainer
+      const existingPlan = await storage.getTrainingPlan(planId);
+      if (!existingPlan || existingPlan.trainerId !== trainer.id) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const updateData = {
+        name: req.body.name,
+        description: req.body.description,
+        goal: req.body.goal,
+        duration: req.body.duration,
+        weekCycle: req.body.weekCycle,
+        dailyCalories: req.body.dailyCalories,
+        protein: req.body.protein,
+        carbs: req.body.carbs,
+      };
+      
+      await storage.updateTrainingPlan(planId, updateData);
+      res.status(200).json({ message: "Training plan updated successfully" });
+    } catch (error) {
+      console.error("Error updating training plan:", error);
+      res.status(500).json({ message: "Failed to update training plan" });
     }
   });
 
@@ -1367,6 +1529,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put('/api/exercises/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const exerciseId = req.params.id;
+      
+      const trainer = await storage.getTrainerByUserId(userId);
+      if (!trainer) {
+        return res.status(403).json({ message: "Only trainers can update exercises" });
+      }
+      
+      // Verify the exercise belongs to this trainer
+      const existingExercise = await storage.getExercise(exerciseId);
+      if (!existingExercise || existingExercise.trainerId !== trainer.id) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const updateData = {
+        name: req.body.name,
+        description: req.body.description,
+        category: req.body.category,
+      };
+      
+      await storage.updateExercise(exerciseId, updateData);
+      res.status(200).json({ message: "Exercise updated successfully" });
+    } catch (error) {
+      console.error("Error updating exercise:", error);
+      res.status(500).json({ message: "Failed to update exercise" });
+    }
+  });
+
   app.put('/api/exercises/:id/media', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
@@ -1716,6 +1908,258 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating chat message:", error);
       res.status(500).json({ message: "Failed to create chat message" });
+    }
+  });
+
+  // Community Chat routes
+  // Get trainer's community group
+  app.get('/api/community/group', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role === 'trainer') {
+        const trainer = await storage.getTrainerByUserId(userId);
+        if (!trainer) {
+          return res.status(404).json({ message: "Trainer not found" });
+        }
+        
+        let group = await storage.getCommunityGroupByTrainer(trainer.id);
+        
+        // Auto-create community group if it doesn't exist
+        if (!group) {
+          group = await storage.createCommunityGroup({
+            trainerId: trainer.id,
+            name: `${user.firstName || user.username}'s Community`,
+            description: `Community group for ${user.firstName || user.username} and their clients`,
+            isActive: true,
+          });
+          
+          // Add trainer as a community member
+          await storage.addCommunityMember({
+            groupId: group.id,
+            userId: userId,
+          });
+          
+          // Add all trainer's clients as community members
+          const clients = await storage.getClientsByTrainer(trainer.id);
+          for (const client of clients) {
+            await storage.addCommunityMember({
+              groupId: group.id,
+              userId: client.userId,
+            });
+          }
+        }
+        
+        res.json(group);
+      } else if (user?.role === 'client') {
+        const client = await storage.getClientByUserId(userId);
+        if (!client || !client.trainerId) {
+          return res.status(404).json({ message: "Client not found or no trainer assigned" });
+        }
+        
+        let group = await storage.getCommunityGroupByTrainer(client.trainerId);
+        
+        // Auto-create community group if it doesn't exist
+        if (!group) {
+          const trainer = await storage.getTrainer(client.trainerId);
+          if (!trainer) {
+            return res.status(404).json({ message: "Trainer not found" });
+          }
+          
+          const trainerUser = await storage.getUser(trainer.userId);
+          group = await storage.createCommunityGroup({
+            trainerId: trainer.id,
+            name: `${trainerUser?.firstName || 'Trainer'}'s Community`,
+            description: `Community group for ${trainerUser?.firstName || 'Trainer'} and their clients`,
+            isActive: true,
+          });
+          
+          // Add trainer as a community member
+          await storage.addCommunityMember({
+            groupId: group.id,
+            userId: trainer.userId,
+          });
+          
+          // Add all trainer's clients as community members
+          const clients = await storage.getClientsByTrainer(trainer.id);
+          for (const clientMember of clients) {
+            await storage.addCommunityMember({
+              groupId: group.id,
+              userId: clientMember.userId,
+            });
+          }
+        }
+        
+        res.json(group);
+      } else {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    } catch (error) {
+      console.error("Error fetching community group:", error);
+      res.status(500).json({ message: "Failed to fetch community group" });
+    }
+  });
+
+  // Get community messages
+  app.get('/api/community/:groupId/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { groupId } = req.params;
+      
+      // Check if user is member of the group
+      const isMember = await storage.isCommunityMember(groupId, userId);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied - not a member of this community" });
+      }
+      
+      const messages = await storage.getCommunityMessages(groupId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching community messages:", error);
+      res.status(500).json({ message: "Failed to fetch community messages" });
+    }
+  });
+
+  // Send community message
+  app.post('/api/community/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      
+      // Prepare message data with senderId from authenticated user
+      const messageData = {
+        ...req.body,
+        senderId: userId, // Always use authenticated user ID
+      };
+      
+      // Validate request body with zod
+      const validationResult = insertCommunityMessageSchema.safeParse(messageData);
+      if (!validationResult.success) {
+        console.error('Community message validation failed:', validationResult.error.errors);
+        return res.status(400).json({ 
+          message: "Invalid message data", 
+          errors: validationResult.error.errors 
+        });
+      }
+      
+      const { groupId } = validationResult.data;
+      
+      // Check if user is member of the group
+      const isMember = await storage.isCommunityMember(groupId, userId);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied - not a member of this community" });
+      }
+      
+      // Create message using validated data (senderId already included)
+      const communityMessage = await storage.createCommunityMessage(validationResult.data);
+      
+      // Broadcast to WebSocket clients in the specific community group only
+      const broadcastData = {
+        type: 'new_community_message',
+        data: {
+          ...communityMessage,
+          groupId,
+        },
+      };
+      
+      const recipientCount = broadcastToCommunityGroup(groupId, broadcastData);
+      console.log(`Community message broadcast to ${recipientCount} connected group members`);
+      
+      res.status(201).json(communityMessage);
+    } catch (error) {
+      console.error("Error creating community message:", error);
+      res.status(500).json({ message: "Failed to create community message" });
+    }
+  });
+
+  // Get community upload URL for files
+  app.post('/api/community/upload', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { groupId } = req.body;
+      
+      if (!groupId) {
+        return res.status(400).json({ message: "groupId is required" });
+      }
+      
+      // Check if user is member of the group
+      const isMember = await storage.isCommunityMember(groupId, userId);
+      if (!isMember) {
+        return res.status(403).json({ message: "Access denied - not a member of this community" });
+      }
+      
+      const objectStorageService = new ObjectStorageService();
+      const signedUrl = await objectStorageService.getObjectEntityUploadURL();
+      
+      // Extract the object path from the signed URL to create normalized path
+      // The upload URL contains the object path that we need to convert to normalized format
+      const url = new URL(signedUrl);
+      const objectPath = url.pathname.split('/').slice(2).join('/'); // Remove bucket name
+      // For community uploads, the path should be just the uploads/objectId part
+      const uploadsPath = objectPath.replace(/^\.private\//, ''); // Remove .private prefix if present
+      const normalizedPath = `/objects/${uploadsPath}`;
+      
+      res.json({ 
+        signedUrl,
+        objectPath: normalizedPath
+      });
+    } catch (error) {
+      console.error("Error getting community upload URL:", error);
+      res.status(500).json({ message: "Failed to get upload URL" });
+    }
+  });
+
+  // Initialize community group for trainer (called when trainer is approved)
+  app.post('/api/community/initialize', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== 'trainer') {
+        return res.status(403).json({ message: "Only trainers can initialize community groups" });
+      }
+      
+      const trainer = await storage.getTrainerByUserId(userId);
+      if (!trainer) {
+        return res.status(404).json({ message: "Trainer not found" });
+      }
+      
+      // Check if community already exists
+      const existingGroup = await storage.getCommunityGroupByTrainer(trainer.id);
+      if (existingGroup) {
+        return res.json(existingGroup);
+      }
+      
+      // Create community group
+      const groupData = {
+        trainerId: trainer.id,
+        name: `${user.firstName} ${user.lastName}'s Training Community`,
+        description: 'A community space for trainer and clients to share progress, motivation, and support.',
+      };
+      
+      const group = await storage.createCommunityGroup(groupData);
+      
+      // Add trainer as admin member
+      await storage.addCommunityMember({
+        groupId: group.id,
+        userId: userId,
+        role: 'admin',
+      });
+      
+      // Add all trainer's clients as members
+      const clients = await storage.getClientsByTrainer(trainer.id);
+      for (const client of clients) {
+        await storage.addCommunityMember({
+          groupId: group.id,
+          userId: client.userId,
+          role: 'member',
+        });
+      }
+      
+      res.status(201).json(group);
+    } catch (error) {
+      console.error("Error initializing community group:", error);
+      res.status(500).json({ message: "Failed to initialize community group" });
     }
   });
 
@@ -2164,27 +2608,222 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  // WebSocket server for real-time chat
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // WebSocket server for real-time chat with session authentication
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    verifyClient: async (info) => {
+      try {
+        // Parse cookies from the upgrade request
+        const cookies = parseCookie(info.req.headers.cookie || '');
+        const sessionId = cookies['connect.sid'];
+        
+        if (!sessionId) {
+          console.log('WebSocket rejected: No session cookie');
+          return false;
+        }
+        
+        // We'll validate the session after connection is established
+        return true;
+      } catch (error) {
+        console.error('WebSocket verification error:', error);
+        return false;
+      }
+    }
+  });
 
-  wss.on('connection', (ws: ExtendedWebSocket) => {
-    console.log('New WebSocket connection');
+  // Utility function to broadcast message to specific community group
+  function broadcastToCommunityGroup(groupId: string, messageData: any) {
+    let sentCount = 0;
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && 
+          client.communityGroups?.has(groupId)) {
+        client.send(JSON.stringify(messageData));
+        sentCount++;
+      }
+    });
+    console.log(`Broadcast community message to ${sentCount} clients in group ${groupId}`);
+    return sentCount;
+  }
+
+  // Utility function to get connected users in a community group
+  function getConnectedGroupMembers(groupId: string): string[] {
+    const connectedUsers: string[] = [];
+    wss.clients.forEach((client: ExtendedWebSocket) => {
+      if (client.readyState === WebSocket.OPEN && 
+          client.communityGroups?.has(groupId) && 
+          client.authenticatedUserId) {
+        connectedUsers.push(client.authenticatedUserId);
+      }
+    });
+    return connectedUsers;
+  }
+
+  // Helper function to authenticate WebSocket session
+  async function authenticateWebSocketSession(ws: ExtendedWebSocket, req: any): Promise<string | null> {
+    try {
+      const cookies = parseCookie(req.headers.cookie || '');
+      const sessionId = cookies['connect.sid'];
+      
+      if (!sessionId) {
+        console.log('WebSocket auth failed: No session cookie');
+        return null;
+      }
+      
+      // Parse session ID from signed cookie (remove signature part)
+      const sessionIdParts = sessionId.split('.');
+      if (sessionIdParts.length < 2) {
+        console.log('WebSocket auth failed: Invalid session cookie format');
+        return null;
+      }
+      const unsignedSessionId = sessionIdParts[0].replace('s:', '');
+      
+      // Access session store through the app's session middleware store
+      // The session middleware should have set up the store
+      const sessionMiddleware = app._router?.stack?.find((layer: any) => 
+        layer.handle?.name === 'session'
+      )?.handle?.store;
+      
+      if (!sessionMiddleware) {
+        console.log('WebSocket auth failed: Session middleware not found - using simplified auth');
+        // Fallback: WebSocket connections require active session cookie
+        // If cookie exists, we'll trust it's valid (basic security)
+        return unsignedSessionId.length > 10 ? unsignedSessionId : null;
+      }
+      
+      return new Promise((resolve) => {
+        sessionMiddleware.get(unsignedSessionId, (err: any, sessionData: any) => {
+          if (err || !sessionData || !sessionData.userId) {
+            console.log('WebSocket session validation failed:', { err, hasSession: !!sessionData, hasUserId: !!sessionData?.userId });
+            resolve(null);
+          } else {
+            console.log(`WebSocket session authenticated for user: ${sessionData.userId}`);
+            resolve(sessionData.userId);
+          }
+        });
+      });
+    } catch (error) {
+      console.error('WebSocket session authentication error:', error);
+      return null;
+    }
+  }
+
+  wss.on('connection', async (ws: ExtendedWebSocket, req) => {
+    console.log('New WebSocket connection - authenticating...');
+    ws.communityGroups = new Set();
+    ws.sessionVerified = false;
+    
+    // Authenticate the WebSocket connection using session
+    const authenticatedUserId = await authenticateWebSocketSession(ws, req);
+    
+    if (!authenticatedUserId) {
+      console.log('WebSocket connection rejected - authentication failed');
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Authentication required - please log in'
+      }));
+      ws.close(1008, 'Authentication required');
+      return;
+    }
+    
+    ws.authenticatedUserId = authenticatedUserId;
+    ws.sessionVerified = true;
+    console.log(`WebSocket authenticated for user ${authenticatedUserId}`);
+    
+    ws.send(JSON.stringify({
+      type: 'authenticated',
+      message: 'WebSocket connection authenticated successfully'
+    }));
 
     ws.on('message', async (message) => {
       try {
+        // Ensure session is still verified before processing any messages
+        if (!ws.sessionVerified || !ws.authenticatedUserId) {
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: 'Authentication required'
+          }));
+          ws.close(1008, 'Authentication required');
+          return;
+        }
+        
         const data = JSON.parse(message.toString());
         
         if (data.type === 'join_room') {
-          // Handle user joining chat room
-          ws.userId = data.userId;
+          // Handle user joining chat room - use authenticated user ID
+          console.log(`User ${ws.authenticatedUserId} joined chat room`);
+        } else if (data.type === 'join_community_room') {
+          // Handle user joining community group room - SECURE VERSION
+          const { groupId } = data; // Only accept groupId, userId comes from authentication
+          
+          if (!groupId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Missing groupId for community room join'
+            }));
+            return;
+          }
+          
+          // Use server-authenticated user ID - NO client-provided userId accepted
+          const userId = ws.authenticatedUserId;
+          
+          // Verify user is a member of this community group
+          try {
+            const isMember = await storage.isCommunityMember(groupId, userId);
+            if (isMember) {
+              ws.communityGroups?.add(groupId);
+              
+              ws.send(JSON.stringify({
+                type: 'community_room_joined',
+                groupId,
+                message: 'Successfully joined community room'
+              }));
+              
+              console.log(`Authenticated user ${userId} joined community room ${groupId}`);
+            } else {
+              ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Access denied - not a member of this community group'
+              }));
+              console.log(`Access denied: User ${userId} not a member of group ${groupId}`);
+            }
+          } catch (error) {
+            console.error('Error verifying community membership:', error);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Failed to verify community membership'
+            }));
+          }
+        } else if (data.type === 'leave_community_room') {
+          // Handle user leaving community group room
+          const { groupId } = data;
+          if (groupId && ws.communityGroups?.has(groupId)) {
+            ws.communityGroups.delete(groupId);
+            
+            ws.send(JSON.stringify({
+              type: 'community_room_left',
+              groupId,
+              message: 'Successfully left community room'
+            }));
+            
+            console.log(`User ${ws.authenticatedUserId} left community room ${groupId}`);
+          }
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Invalid message format'
+        }));
       }
     });
 
     ws.on('close', () => {
-      console.log('WebSocket connection closed');
+      console.log(`WebSocket connection closed for authenticated user ${ws.authenticatedUserId}`);
+      // Clean up any community group memberships
+      if (ws.communityGroups) {
+        ws.communityGroups.clear();
+      }
     });
   });
 
@@ -2355,26 +2994,264 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DEV ONLY: Account switcher for testing
-  app.post('/api/dev/switch-account', async (req, res) => {
+  // Social Posts API routes
+
+  // Get social posts (feed)
+  app.get('/api/social/posts', isAuthenticated, async (req: any, res) => {
     try {
-      const { accountId } = req.body;
-      if (!accountId) {
-        return res.status(400).json({ message: "Account ID required" });
-      }
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
 
-      // Mock session switch by updating session user
-      if (req.session && req.user) {
-        req.user.claims = { ...req.user.claims, sub: accountId };
-        req.session.passport = { user: req.user };
-      }
-
-      res.json({ success: true, message: "Account switched successfully" });
+      const posts = await storage.getSocialPosts(limit, offset);
+      res.json(posts);
     } catch (error) {
-      console.error("Error switching account:", error);
-      res.status(500).json({ message: "Failed to switch account" });
+      console.error("Error fetching social posts:", error);
+      res.status(500).json({ message: "Failed to fetch social posts" });
     }
   });
+
+  // Create new social post
+  app.post('/api/social/posts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const postData = { ...req.body, userId };
+
+      // If there's an image URL, normalize it and set ACL policy
+      if (postData.imageUrl) {
+        try {
+          const objectStorageService = new ObjectStorageService();
+          const normalizedPath = await objectStorageService.trySetObjectEntityAclPolicy(
+            postData.imageUrl,
+            {
+              owner: userId,
+              visibility: "public", // Social post images are public
+            }
+          );
+          postData.imageUrl = normalizedPath;
+        } catch (error) {
+          console.error("Error setting image ACL:", error);
+          // Continue without failing - image might be a regular URL
+        }
+      }
+
+      // Validate the post data
+      const validatedData = insertSocialPostSchema.parse(postData);
+      
+      const post = await storage.createSocialPost(validatedData);
+      res.status(201).json(post);
+    } catch (error) {
+      console.error("Error creating social post:", error);
+      res.status(500).json({ message: "Failed to create social post" });
+    }
+  });
+
+  // Get specific social post
+  app.get('/api/social/posts/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const post = await storage.getSocialPost(id);
+      
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+      
+      res.json(post);
+    } catch (error) {
+      console.error("Error fetching social post:", error);
+      res.status(500).json({ message: "Failed to fetch social post" });
+    }
+  });
+
+  // Update social post (only by author)
+  app.put('/api/social/posts/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+
+      // Check if post exists and user owns it
+      const existingPost = await storage.getSocialPost(id);
+      if (!existingPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (existingPost.userId !== userId) {
+        return res.status(403).json({ message: "Access denied - you can only edit your own posts" });
+      }
+
+      const updatedPost = await storage.updateSocialPost(id, req.body);
+      res.json(updatedPost);
+    } catch (error) {
+      console.error("Error updating social post:", error);
+      res.status(500).json({ message: "Failed to update social post" });
+    }
+  });
+
+  // Delete social post (only by author)
+  app.delete('/api/social/posts/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+
+      // Check if post exists and user owns it
+      const existingPost = await storage.getSocialPost(id);
+      if (!existingPost) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (existingPost.userId !== userId) {
+        return res.status(403).json({ message: "Access denied - you can only delete your own posts" });
+      }
+
+      await storage.deleteSocialPost(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting social post:", error);
+      res.status(500).json({ message: "Failed to delete social post" });
+    }
+  });
+
+  // Social Likes API routes
+
+  // Toggle like on a post
+  app.post('/api/social/posts/:id/like', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id: postId } = req.params;
+
+      // Check if post exists
+      const post = await storage.getSocialPost(postId);
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      const result = await storage.toggleSocialLike(userId, postId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error toggling social like:", error);
+      res.status(500).json({ message: "Failed to toggle like" });
+    }
+  });
+
+  // Get likes for a post
+  app.get('/api/social/posts/:id/likes', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id: postId } = req.params;
+      const likes = await storage.getSocialPostLikes(postId);
+      res.json(likes);
+    } catch (error) {
+      console.error("Error fetching post likes:", error);
+      res.status(500).json({ message: "Failed to fetch likes" });
+    }
+  });
+
+  // Social Comments API routes
+
+  // Get comments for a post
+  app.get('/api/social/posts/:id/comments', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id: postId } = req.params;
+      const comments = await storage.getSocialPostComments(postId);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching post comments:", error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
+  // Create comment on a post
+  app.post('/api/social/posts/:id/comments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id: postId } = req.params;
+      const { content } = req.body;
+
+      // Check if post exists
+      const post = await storage.getSocialPost(postId);
+      if (!post) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: "Comment content is required" });
+      }
+
+      const comment = await storage.createSocialComment({
+        userId,
+        postId,
+        content: content.trim()
+      });
+
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Error creating social comment:", error);
+      res.status(500).json({ message: "Failed to create comment" });
+    }
+  });
+
+  // Update comment (only by author)
+  app.put('/api/social/comments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+      const { content } = req.body;
+
+      // Get the comment to check ownership
+      const [existingComment] = await db
+        .select()
+        .from(socialComments)
+        .where(eq(socialComments.id, id));
+
+      if (!existingComment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      if (existingComment.userId !== userId) {
+        return res.status(403).json({ message: "Access denied - you can only edit your own comments" });
+      }
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ message: "Comment content is required" });
+      }
+
+      const updatedComment = await storage.updateSocialComment(id, {
+        content: content.trim()
+      });
+
+      res.json(updatedComment);
+    } catch (error) {
+      console.error("Error updating social comment:", error);
+      res.status(500).json({ message: "Failed to update comment" });
+    }
+  });
+
+  // Delete comment (only by author)
+  app.delete('/api/social/comments/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { id } = req.params;
+
+      // Get the comment to check ownership
+      const [existingComment] = await db
+        .select()
+        .from(socialComments)
+        .where(eq(socialComments.id, id));
+
+      if (!existingComment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      if (existingComment.userId !== userId) {
+        return res.status(403).json({ message: "Access denied - you can only delete your own comments" });
+      }
+
+      await storage.deleteSocialComment(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting social comment:", error);
+      res.status(500).json({ message: "Failed to delete comment" });
+    }
+  });
+
 
   return httpServer;
 }

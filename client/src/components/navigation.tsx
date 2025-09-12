@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -42,29 +43,8 @@ export default function Navigation() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
-  const testAccounts = [
-    { id: '39363427', email: 'darkryuudan@gmail.com', role: 'superadmin', name: 'Ronny (SuperAdmin)' },
-    { id: '46005006', email: 'kuban.solutions@gmail.com', role: 'trainer', name: 'Trainer Account' },
-    { id: 'client001', email: 'client.test@example.com', role: 'client', name: 'John Client' }
-  ];
-
-  const switchAccountMutation = useMutation({
-    mutationFn: async (accountId: string) => {
-      return await apiRequest('POST', '/api/dev/switch-account', { accountId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries();
-      window.location.reload();
-    },
-    onError: (error) => {
-      toast({
-        title: "Switch Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   if (!isAuthenticated) return null;
 
@@ -73,99 +53,117 @@ export default function Navigation() {
   const navigationItems = [
     { 
       href: '/', 
-      label: 'Dashboard', 
+      label: t('nav.dashboard'), 
       icon: Home,
       roles: ['superadmin', 'trainer', 'client']
     },
     { 
       href: '/manage-trainers', 
-      label: 'Manage Trainers', 
+      label: t('admin.totalTrainers'), 
       icon: Users,
       roles: ['superadmin']
     },
     { 
       href: '/admin-clients', 
-      label: 'All Clients', 
+      label: t('admin.totalClients'), 
       icon: UserCheck,
       roles: ['superadmin']
     },
     { 
       href: '/admin-plans', 
-      label: 'All Training Plans', 
+      label: t('plans.trainingPlans'), 
       icon: Dumbbell,
       roles: ['superadmin']
     },
     { 
       href: '/admin-exercises', 
-      label: 'All Exercises', 
+      label: t('exercises.library'), 
       icon: Activity,
       roles: ['superadmin']
     },
     { 
       href: '/payment-plans', 
-      label: 'Payment Plans', 
+      label: t('nav.paymentPlans'), 
       icon: CreditCard,
       roles: ['superadmin']
     },
     { 
       href: '/user-management', 
-      label: 'User Management', 
+      label: t('nav.userManagement'), 
       icon: UserCog,
       roles: ['superadmin']
     },
     { 
+      href: '/profile', 
+      label: t('nav.profile'), 
+      icon: User,
+      roles: ['trainer']
+    },
+    { 
       href: '/clients', 
-      label: 'My Clients', 
+      label: t('nav.clients'), 
       icon: Users,
       roles: ['trainer']
     },
     { 
       href: '/training-plans', 
-      label: 'Training Plans', 
+      label: t('nav.plans'), 
       icon: Dumbbell,
       roles: ['trainer']
     },
     { 
       href: '/daily-workout', 
-      label: 'Daily Workout', 
+      label: t('nav.dailyWorkout'), 
       icon: Activity,
       roles: ['client']
     },
     { 
       href: '/my-training-plans', 
-      label: 'My Training Plans', 
+      label: t('nav.plans'), 
       icon: Dumbbell,
       roles: ['client']
     },
     { 
       href: '/monthly-evaluation', 
-      label: 'Monthly Evaluation', 
+      label: t('client.monthlyEvaluation'), 
       icon: Calendar,
       roles: ['client']
     },
     { 
       href: '/profile', 
-      label: 'Profile', 
+      label: t('nav.profile'), 
       icon: User,
       roles: ['client']
     },
     { 
       href: '/exercises', 
-      label: 'Exercises', 
+      label: t('nav.exercises'), 
       icon: Dumbbell,
       roles: ['trainer']
     },
     { 
       href: '/client-payment-plans', 
-      label: 'Client Payment Plans', 
+      label: t('nav.clientPaymentPlans'), 
       icon: CreditCard,
       roles: ['trainer'] 
     },
     { 
       href: '/reports', 
-      label: 'Reports', 
+      label: t('nav.reports'), 
       icon: BarChart3,
       roles: ['trainer']
+    },
+    { 
+      href: '/community', 
+      label: t('nav.communityChat'), 
+      icon: MessageCircle,
+      roles: ['trainer', 'client']
+    },
+    { 
+      href: '/social', 
+      label: t('nav.social', 'Social'), 
+      icon: MessageCircle,
+      roles: ['superadmin', 'trainer', 'client']
     }
   ].filter(item => item.roles.includes(userRole));
 
@@ -288,34 +286,13 @@ export default function Navigation() {
                     </div>
                   </div>
                   <DropdownMenuSeparator />
-                  {/* Test Account Switcher */}
-                  <div className="px-2 py-1">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Test Accounts:</p>
-                    {testAccounts.map((account) => (
-                      <DropdownMenuItem 
-                        key={account.id}
-                        onClick={() => switchAccountMutation.mutate(account.id)}
-                        className={user?.id === account.id ? "bg-blue-50 dark:bg-blue-900/20" : ""}
-                      >
-                        <UserCog className="mr-2 h-4 w-4" />
-                        <div className="flex flex-col">
-                          <span className="text-sm">{account.name}</span>
-                          <span className="text-xs text-muted-foreground capitalize">{account.role}</span>
-                        </div>
-                        {user?.id === account.id && (
-                          <span className="ml-auto text-xs text-blue-600 dark:text-blue-400">Current</span>
-                        )}
-                      </DropdownMenuItem>
-                    ))}
-                  </div>
-                  <DropdownMenuSeparator />
                   <DropdownMenuItem>
                     <Settings className="mr-2 h-4 w-4" />
-                    Settings
+                    {t('nav.settings')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
-                    Log out
+                    {t('nav.logout')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -367,34 +344,13 @@ export default function Navigation() {
               </div>
             </div>
             <DropdownMenuSeparator />
-            {/* Test Account Switcher */}
-            <div className="px-2 py-1">
-              <p className="text-xs font-medium text-muted-foreground mb-1">Test Accounts:</p>
-              {testAccounts.map((account) => (
-                <DropdownMenuItem 
-                  key={account.id}
-                  onClick={() => switchAccountMutation.mutate(account.id)}
-                  className={user?.id === account.id ? "bg-blue-50 dark:bg-blue-900/20" : ""}
-                >
-                  <UserCog className="mr-2 h-4 w-4" />
-                  <div className="flex flex-col">
-                    <span className="text-sm">{account.name}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{account.role}</span>
-                  </div>
-                  {user?.id === account.id && (
-                    <span className="ml-auto text-xs text-blue-600 dark:text-blue-400">Current</span>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </div>
-            <DropdownMenuSeparator />
             <DropdownMenuItem>
               <Settings className="mr-2 h-4 w-4" />
-              Settings
+              {t('nav.settings')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => window.location.href = '/api/logout'}>
               <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              {t('auth.signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

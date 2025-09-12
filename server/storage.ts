@@ -10,6 +10,12 @@ import {
   monthlyEvaluations,
   posts,
   chatMessages,
+  communityGroups,
+  communityMembers,
+  communityMessages,
+  socialPosts,
+  socialLikes,
+  socialComments,
   paymentPlans,
   clientPaymentPlans,
   type User,
@@ -34,10 +40,22 @@ import {
   type InsertPost,
   type ChatMessage,
   type InsertChatMessage,
+  type CommunityGroup,
+  type InsertCommunityGroup,
+  type CommunityMember,
+  type InsertCommunityMember,
+  type CommunityMessage,
+  type InsertCommunityMessage,
   type PaymentPlan,
   type InsertPaymentPlan,
   type ClientPaymentPlan,
   type InsertClientPaymentPlan,
+  type SocialPost,
+  type SocialLike,
+  type SocialComment,
+  type InsertSocialPost,
+  type InsertSocialLike,
+  type InsertSocialComment,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, count, sum, sql, gte, lte } from "drizzle-orm";
@@ -123,6 +141,14 @@ export interface IStorage {
   getChatMessages(userId1: string, userId2: string): Promise<ChatMessage[]>;
   markMessagesAsRead(receiverId: string, senderId: string): Promise<void>;
   canTrainerChatWithUser(trainerId: string, targetUserId: string): Promise<boolean>;
+  
+  // Community operations
+  createCommunityGroup(group: InsertCommunityGroup): Promise<CommunityGroup>;
+  getCommunityGroupByTrainer(trainerId: string): Promise<CommunityGroup | undefined>;
+  addCommunityMember(member: InsertCommunityMember): Promise<CommunityMember>;
+  isCommunityMember(groupId: string, userId: string): Promise<boolean>;
+  createCommunityMessage(message: InsertCommunityMessage): Promise<CommunityMessage>;
+  getCommunityMessages(groupId: string): Promise<CommunityMessage[]>;
 
   // Payment plan operations (SuperAdmin manages trainer payment plans)
   getAllPaymentPlans(): Promise<PaymentPlan[]>;
@@ -168,6 +194,26 @@ export interface IStorage {
   getTrainersWithDetails(): Promise<any[]>;
   updateTrainerPaymentPlan(trainerId: string, paymentPlanId: string | null): Promise<void>;
   updateTrainerStatus(trainerId: string, status: string): Promise<void>;
+
+  // Social operations
+  createSocialPost(post: InsertSocialPost): Promise<SocialPost>;
+  getSocialPosts(limit?: number, offset?: number): Promise<any[]>; // Returns posts with author info
+  getSocialPost(id: string): Promise<SocialPost | undefined>;
+  updateSocialPost(id: string, post: Partial<InsertSocialPost>): Promise<SocialPost>;
+  deleteSocialPost(id: string): Promise<void>;
+  
+  // Social likes operations
+  toggleSocialLike(userId: string, postId: string): Promise<{ liked: boolean; likesCount: number }>;
+  getSocialPostLikes(postId: string): Promise<SocialLike[]>;
+  
+  // Social comments operations
+  createSocialComment(comment: InsertSocialComment): Promise<SocialComment>;
+  getSocialPostComments(postId: string): Promise<any[]>; // Returns comments with author info
+  updateSocialComment(id: string, comment: Partial<InsertSocialComment>): Promise<SocialComment>;
+  deleteSocialComment(id: string): Promise<void>;
+  
+  // Helper method to check if image belongs to a social post
+  isSocialPostImage(imageUrl: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -766,12 +812,13 @@ export class DatabaseStorage implements IStorage {
       .select({
         totalClients: count(clients.id),
         activeClients: count(sql`CASE WHEN ${users.status} = 'active' THEN 1 END`),
-        monthlyRevenue: sum(trainers.monthlyRevenue),
+        monthlyRevenue: sum(clientPaymentPlans.amount),
         totalPlans: count(trainingPlans.id),
       })
       .from(trainers)
       .leftJoin(clients, eq(trainers.id, clients.trainerId))
       .leftJoin(users, eq(clients.userId, users.id))
+      .leftJoin(clientPaymentPlans, eq(clients.clientPaymentPlanId, clientPaymentPlans.id))
       .leftJoin(trainingPlans, eq(trainers.id, trainingPlans.trainerId))
       .where(eq(trainers.id, trainerId))
       .groupBy(trainers.id);
@@ -1163,6 +1210,316 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(clients.id, clientId));
+  }
+
+  // Community operations
+  async createCommunityGroup(group: InsertCommunityGroup): Promise<CommunityGroup> {
+    const [created] = await db
+      .insert(communityGroups)
+      .values(group)
+      .returning();
+    return created;
+  }
+
+  async getCommunityGroupByTrainer(trainerId: string): Promise<CommunityGroup | undefined> {
+    const [group] = await db
+      .select()
+      .from(communityGroups)
+      .where(and(
+        eq(communityGroups.trainerId, trainerId),
+        eq(communityGroups.isActive, true)
+      ));
+    return group;
+  }
+
+  async addCommunityMember(member: InsertCommunityMember): Promise<CommunityMember> {
+    const [created] = await db
+      .insert(communityMembers)
+      .values(member)
+      .returning();
+    return created;
+  }
+
+  async isCommunityMember(groupId: string, userId: string): Promise<boolean> {
+    const [member] = await db
+      .select()
+      .from(communityMembers)
+      .where(and(
+        eq(communityMembers.groupId, groupId),
+        eq(communityMembers.userId, userId)
+      ));
+    return !!member;
+  }
+
+  async createCommunityMessage(message: InsertCommunityMessage): Promise<CommunityMessage> {
+    const [created] = await db
+      .insert(communityMessages)
+      .values(message)
+      .returning();
+    
+    // Get the message with sender information
+    const [messageWithSender] = await db
+      .select({
+        id: communityMessages.id,
+        groupId: communityMessages.groupId,
+        senderId: communityMessages.senderId,
+        message: communityMessages.message,
+        messageType: communityMessages.messageType,
+        attachmentUrl: communityMessages.attachmentUrl,
+        attachmentName: communityMessages.attachmentName,
+        attachmentType: communityMessages.attachmentType,
+        attachmentSize: communityMessages.attachmentSize,
+        urlPreviewTitle: communityMessages.urlPreviewTitle,
+        urlPreviewDescription: communityMessages.urlPreviewDescription,
+        urlPreviewImage: communityMessages.urlPreviewImage,
+        createdAt: communityMessages.createdAt,
+        senderFirstName: users.firstName,
+        senderLastName: users.lastName,
+        senderRole: users.role,
+      })
+      .from(communityMessages)
+      .innerJoin(users, eq(communityMessages.senderId, users.id))
+      .where(eq(communityMessages.id, created.id));
+    
+    return messageWithSender as any;
+  }
+
+  async getCommunityMessages(groupId: string): Promise<CommunityMessage[]> {
+    const messages = await db
+      .select({
+        id: communityMessages.id,
+        groupId: communityMessages.groupId,
+        senderId: communityMessages.senderId,
+        message: communityMessages.message,
+        messageType: communityMessages.messageType,
+        attachmentUrl: communityMessages.attachmentUrl,
+        attachmentName: communityMessages.attachmentName,
+        attachmentType: communityMessages.attachmentType,
+        attachmentSize: communityMessages.attachmentSize,
+        urlPreviewTitle: communityMessages.urlPreviewTitle,
+        urlPreviewDescription: communityMessages.urlPreviewDescription,
+        urlPreviewImage: communityMessages.urlPreviewImage,
+        createdAt: communityMessages.createdAt,
+        senderFirstName: users.firstName,
+        senderLastName: users.lastName,
+        senderRole: users.role,
+      })
+      .from(communityMessages)
+      .innerJoin(users, eq(communityMessages.senderId, users.id))
+      .where(eq(communityMessages.groupId, groupId))
+      .orderBy(desc(communityMessages.createdAt));
+    
+    return messages as any;
+  }
+
+  async isFileAssociatedWithUserCommunities(filePath: string, userId: string): Promise<boolean | undefined> {
+    // Find all community messages that use this file as attachment
+    const messagesWithFile = await db
+      .select({
+        groupId: communityMessages.groupId,
+      })
+      .from(communityMessages)
+      .where(eq(communityMessages.attachmentUrl, filePath));
+
+    if (messagesWithFile.length === 0) {
+      // File is not associated with any community messages
+      return undefined;
+    }
+
+    // Check if user is a member of any of the groups that use this file
+    for (const messageGroup of messagesWithFile) {
+      const isMember = await this.isCommunityMember(messageGroup.groupId, userId);
+      if (isMember) {
+        return true;
+      }
+    }
+
+    // User is not a member of any group that uses this file
+    return false;
+  }
+
+  async isSocialPostImage(imageUrl: string): Promise<boolean> {
+    const [post] = await db
+      .select({ id: socialPosts.id })
+      .from(socialPosts)
+      .where(eq(socialPosts.imageUrl, imageUrl))
+      .limit(1);
+    
+    return !!post;
+  }
+
+  // Social Posts operations
+  async createSocialPost(post: InsertSocialPost): Promise<SocialPost> {
+    const [created] = await db.insert(socialPosts).values(post).returning();
+    return created;
+  }
+
+  async getSocialPosts(limit: number = 20, offset: number = 0): Promise<any[]> {
+    const posts = await db
+      .select({
+        id: socialPosts.id,
+        content: socialPosts.content,
+        imageUrl: socialPosts.imageUrl,
+        imageName: socialPosts.imageName,
+        imageSize: socialPosts.imageSize,
+        likesCount: socialPosts.likesCount,
+        commentsCount: socialPosts.commentsCount,
+        createdAt: socialPosts.createdAt,
+        updatedAt: socialPosts.updatedAt,
+        authorId: socialPosts.userId,
+        authorFirstName: users.firstName,
+        authorLastName: users.lastName,
+        authorUsername: users.username,
+        authorRole: users.role,
+        authorProfileImageUrl: users.profileImageUrl,
+      })
+      .from(socialPosts)
+      .innerJoin(users, eq(socialPosts.userId, users.id))
+      .orderBy(desc(socialPosts.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
+    return posts;
+  }
+
+  async getSocialPost(id: string): Promise<SocialPost | undefined> {
+    const [post] = await db.select().from(socialPosts).where(eq(socialPosts.id, id));
+    return post;
+  }
+
+  async updateSocialPost(id: string, post: Partial<InsertSocialPost>): Promise<SocialPost> {
+    const [updated] = await db
+      .update(socialPosts)
+      .set({ ...post, updatedAt: new Date() })
+      .where(eq(socialPosts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSocialPost(id: string): Promise<void> {
+    // Delete all likes and comments first
+    await db.delete(socialLikes).where(eq(socialLikes.postId, id));
+    await db.delete(socialComments).where(eq(socialComments.postId, id));
+    
+    // Delete the post
+    await db.delete(socialPosts).where(eq(socialPosts.id, id));
+  }
+
+  // Social Likes operations
+  async toggleSocialLike(userId: string, postId: string): Promise<{ liked: boolean; likesCount: number }> {
+    // Check if user already liked this post
+    const [existingLike] = await db
+      .select()
+      .from(socialLikes)
+      .where(and(eq(socialLikes.userId, userId), eq(socialLikes.postId, postId)));
+
+    let liked: boolean;
+
+    if (existingLike) {
+      // Unlike the post
+      await db
+        .delete(socialLikes)
+        .where(and(eq(socialLikes.userId, userId), eq(socialLikes.postId, postId)));
+      liked = false;
+    } else {
+      // Like the post
+      await db.insert(socialLikes).values({ userId, postId });
+      liked = true;
+    }
+
+    // Update likes count on the post
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(socialLikes)
+      .where(eq(socialLikes.postId, postId));
+
+    const likesCount = countResult?.count || 0;
+
+    await db
+      .update(socialPosts)
+      .set({ likesCount })
+      .where(eq(socialPosts.id, postId));
+
+    return { liked, likesCount };
+  }
+
+  async getSocialPostLikes(postId: string): Promise<SocialLike[]> {
+    return await db.select().from(socialLikes).where(eq(socialLikes.postId, postId));
+  }
+
+  // Social Comments operations
+  async createSocialComment(comment: InsertSocialComment): Promise<SocialComment> {
+    const [created] = await db.insert(socialComments).values(comment).returning();
+
+    // Update comments count on the post
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(socialComments)
+      .where(eq(socialComments.postId, comment.postId));
+
+    const commentsCount = countResult?.count || 0;
+
+    await db
+      .update(socialPosts)
+      .set({ commentsCount })
+      .where(eq(socialPosts.id, comment.postId));
+
+    return created;
+  }
+
+  async getSocialPostComments(postId: string): Promise<any[]> {
+    const comments = await db
+      .select({
+        id: socialComments.id,
+        content: socialComments.content,
+        createdAt: socialComments.createdAt,
+        updatedAt: socialComments.updatedAt,
+        postId: socialComments.postId,
+        authorId: socialComments.userId,
+        authorFirstName: users.firstName,
+        authorLastName: users.lastName,
+        authorUsername: users.username,
+        authorRole: users.role,
+        authorProfileImageUrl: users.profileImageUrl,
+      })
+      .from(socialComments)
+      .innerJoin(users, eq(socialComments.userId, users.id))
+      .where(eq(socialComments.postId, postId))
+      .orderBy(socialComments.createdAt);
+    
+    return comments;
+  }
+
+  async updateSocialComment(id: string, comment: Partial<InsertSocialComment>): Promise<SocialComment> {
+    const [updated] = await db
+      .update(socialComments)
+      .set({ ...comment, updatedAt: new Date() })
+      .where(eq(socialComments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSocialComment(id: string): Promise<void> {
+    // Get the comment to find the postId
+    const [comment] = await db.select().from(socialComments).where(eq(socialComments.id, id));
+    
+    if (comment) {
+      // Delete the comment
+      await db.delete(socialComments).where(eq(socialComments.id, id));
+
+      // Update comments count on the post
+      const [countResult] = await db
+        .select({ count: count() })
+        .from(socialComments)
+        .where(eq(socialComments.postId, comment.postId));
+
+      const commentsCount = countResult?.count || 0;
+
+      await db
+        .update(socialPosts)
+        .set({ commentsCount })
+        .where(eq(socialPosts.id, comment.postId));
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from 'react-i18next';
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,8 +20,12 @@ import { Link } from "wouter";
 export default function TrainingPlans() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<any>(null);
+  const [editGoal, setEditGoal] = useState<string>("");
+  const [editDuration, setEditDuration] = useState<string>("");
+  const [editWeekCycle, setEditWeekCycle] = useState<string>("");
   const [weeksCycle, setWeeksCycle] = useState<number>(1);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [showPlanDetails, setShowPlanDetails] = useState(false);
@@ -67,8 +72,8 @@ export default function TrainingPlans() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Training plan created successfully",
+        title: t('plans.success'),
+        description: t('plans.planCreated'),
       });
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["/api/training-plans"] });
@@ -86,14 +91,44 @@ export default function TrainingPlans() {
         return;
       }
       toast({
-        title: "Error",
-        description: "Failed to create training plan",
+        title: t('plans.error'),
+        description: t('plans.failedToCreate'),
         variant: "destructive",
       });
     },
   });
 
-
+  const updatePlanMutation = useMutation({
+    mutationFn: async ({ id, ...data }: any) => {
+      await apiRequest("PUT", `/api/training-plans/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: t('plans.success'),
+        description: t('plans.planUpdated'),
+      });
+      setEditingPlan(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/training-plans"] });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: t('plans.error'),
+        description: t('plans.failedToUpdate'),
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleCreatePlan = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -132,6 +167,25 @@ export default function TrainingPlans() {
     };
 
     createPlanMutation.mutate(data);
+  };
+
+  const handleUpdatePlan = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    const data = {
+      id: editingPlan.id,
+      name: formData.get('name') as string,
+      description: formData.get('description') as string,
+      goal: editGoal,
+      duration: editDuration,
+      weekCycle: parseInt(editWeekCycle),
+      dailyCalories: parseInt(formData.get('dailyCalories') as string) || null,
+      protein: parseInt(formData.get('protein') as string) || null,
+      carbs: parseInt(formData.get('carbs') as string) || null,
+    };
+
+    updatePlanMutation.mutate(data);
   };
 
   const handleWeeksCycleChange = (value: string) => {
@@ -209,7 +263,14 @@ export default function TrainingPlans() {
   };
 
   const getDayName = (dayNumber: number) => {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const days = [
+      t('days.monday'),
+      t('days.tuesday'),
+      t('days.wednesday'),
+      t('days.thursday'),
+      t('days.friday'),
+      t('days.saturday')
+    ];
     return days[dayNumber - 1];
   };
 
@@ -241,7 +302,7 @@ export default function TrainingPlans() {
   return (
     <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Training Plans</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('plans.trainingPlans')}</h1>
         <Button onClick={() => {
           setShowCreateForm(true);
           // Initialize workout days for default 1 week
@@ -250,81 +311,81 @@ export default function TrainingPlans() {
           }
         }}>
           <Plus className="h-4 w-4 mr-2" />
-          Create Plan
+          {t('plans.createPlan')}
         </Button>
       </div>
 
       {showCreateForm && (
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Create New Training Plan</CardTitle>
+            <CardTitle>{t('plans.createNewPlan')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreatePlan} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="name">Plan Name</Label>
-                  <Input id="name" name="name" placeholder="e.g., Weight Loss Program" required />
+                  <Label htmlFor="name">{t('plans.planName')}</Label>
+                  <Input id="name" name="name" placeholder={t('plans.planNamePlaceholder')} required />
                 </div>
                 <div>
-                  <Label htmlFor="duration">Plan Duration</Label>
+                  <Label htmlFor="duration">{t('plans.planDuration')}</Label>
                   <Select name="duration" required>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select duration" />
+                      <SelectValue placeholder={t('plans.selectDuration')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="till-goal">Till Goal is Met</SelectItem>
-                      <SelectItem value="4">4 weeks</SelectItem>
-                      <SelectItem value="6">6 weeks</SelectItem>
-                      <SelectItem value="8">8 weeks</SelectItem>
-                      <SelectItem value="12">12 weeks</SelectItem>
-                      <SelectItem value="16">16 weeks</SelectItem>
-                      <SelectItem value="24">24 weeks</SelectItem>
+                      <SelectItem value="till-goal">{t('plans.tillGoal')}</SelectItem>
+                      <SelectItem value="4">{t('plans.weeksOption', { count: 4 })}</SelectItem>
+                      <SelectItem value="6">{t('plans.weeksOption', { count: 6 })}</SelectItem>
+                      <SelectItem value="8">{t('plans.weeksOption', { count: 8 })}</SelectItem>
+                      <SelectItem value="12">{t('plans.weeksOption', { count: 12 })}</SelectItem>
+                      <SelectItem value="16">{t('plans.weeksOption', { count: 16 })}</SelectItem>
+                      <SelectItem value="24">{t('plans.weeksOption', { count: 24 })}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="weeksCycle">Week Cycle Pattern</Label>
+                  <Label htmlFor="weeksCycle">{t('plans.weekCyclePattern')}</Label>
                   <Select value={weeksCycle.toString()} onValueChange={handleWeeksCycleChange} required>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select pattern cycle" />
+                      <SelectValue placeholder={t('plans.selectPatternCycle')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">1 week (repeat every week)</SelectItem>
-                      <SelectItem value="2">2 weeks (repeat every 2 weeks)</SelectItem>
-                      <SelectItem value="3">3 weeks (repeat every 3 weeks)</SelectItem>
-                      <SelectItem value="4">4 weeks (repeat every 4 weeks)</SelectItem>
+                      <SelectItem value="1">{t('plans.weekOption')}</SelectItem>
+                      <SelectItem value="2">{t('plans.weeksRepeatOption', { count: 2 })}</SelectItem>
+                      <SelectItem value="3">{t('plans.weeksRepeatOption', { count: 3 })}</SelectItem>
+                      <SelectItem value="4">{t('plans.weeksRepeatOption', { count: 4 })}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{t('plans.description')}</Label>
                 <Textarea 
                   id="description" 
                   name="description" 
-                  placeholder="Describe the plan goals and approach..." 
+                  placeholder={t('plans.descriptionPlaceholder')} 
                   rows={3}
                 />
               </div>
 
               <div>
-                <Label htmlFor="goal">Primary Goal</Label>
-                <Input id="goal" name="goal" placeholder="e.g., Lose weight, build muscle" />
+                <Label htmlFor="goal">{t('plans.primaryGoal')}</Label>
+                <Input id="goal" name="goal" placeholder={t('plans.primaryGoalPlaceholder')} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="dailyCalories">Daily Calories</Label>
+                  <Label htmlFor="dailyCalories">{t('plans.dailyCalories')}</Label>
                   <Input id="dailyCalories" name="dailyCalories" type="number" placeholder="2000" />
                 </div>
                 <div>
-                  <Label htmlFor="protein">Protein (g)</Label>
+                  <Label htmlFor="protein">{t('plans.proteinG')}</Label>
                   <Input id="protein" name="protein" type="number" placeholder="120" />
                 </div>
                 <div>
-                  <Label htmlFor="carbs">Carbs (g)</Label>
+                  <Label htmlFor="carbs">{t('plans.carbsG')}</Label>
                   <Input id="carbs" name="carbs" type="number" placeholder="200" />
                 </div>
               </div>
@@ -332,19 +393,19 @@ export default function TrainingPlans() {
               {/* Weekly Workout Days Tabs */}
               {weeksCycle > 0 && (
                 <div className="space-y-4">
-                  <Label className="text-base font-semibold">Weekly Workout Schedule</Label>
+                  <Label className="text-base font-semibold">{t('plans.weeklyWorkoutSchedule')}</Label>
                   <Tabs defaultValue="1" className="w-full">
                     <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${weeksCycle}, 1fr)` }}>
                       {Array.from({ length: weeksCycle }, (_, i) => i + 1).map((week) => (
                         <TabsTrigger key={week} value={week.toString()}>
-                          Week {week}
+                          {t('plans.weekLabel', { count: week })}
                         </TabsTrigger>
                       ))}
                     </TabsList>
                     
                     {Array.from({ length: weeksCycle }, (_, i) => i + 1).map((week) => (
                       <TabsContent key={week} value={week.toString()} className="space-y-4">
-                        <h3 className="text-lg font-medium">Week {week} Workouts</h3>
+                        <h3 className="text-lg font-medium">{t('plans.weekWorkouts', { count: week })}</h3>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           {Array.from({ length: 6 }, (_, i) => i + 1).map((day) => (
                             <div key={day} className="space-y-3">
@@ -354,7 +415,7 @@ export default function TrainingPlans() {
                               
                               {/* Available Exercises */}
                               <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
-                                <Label className="text-sm text-gray-600">Available Exercises:</Label>
+                                <Label className="text-sm text-gray-600">{t('plans.availableExercises')}</Label>
                                 {Array.isArray(exercises) && exercises.length > 0 ? (
                                   exercises.map((exercise: any) => {
                                     const isSelected = workoutDays[week]?.[day]?.some(ex => ex.exerciseId === exercise.id);
@@ -377,14 +438,14 @@ export default function TrainingPlans() {
                                     );
                                   })
                                 ) : (
-                                  <p className="text-sm text-gray-500">No exercises available. Create exercises first.</p>
+                                  <p className="text-sm text-gray-500">{t('plans.noExercisesAvailable')}</p>
                                 )}
                               </div>
 
                               {/* Selected Exercises Details */}
                               {workoutDays[week]?.[day] && workoutDays[week][day].length > 0 && (
                                 <div className="space-y-3">
-                                  <Label className="text-sm text-gray-600">Selected Exercises:</Label>
+                                  <Label className="text-sm text-gray-600">{t('plans.selectedExercises')}</Label>
                                   {workoutDays[week][day].map((selectedExercise, index) => {
                                     const exercise = Array.isArray(exercises) ? exercises.find((ex: any) => ex.id === selectedExercise.exerciseId) : undefined;
                                     return (
@@ -404,7 +465,7 @@ export default function TrainingPlans() {
                                         
                                         <div className="grid grid-cols-2 gap-2">
                                           <div>
-                                            <Label className="text-xs">Sets</Label>
+                                            <Label className="text-xs">{t('plans.sets').replace(':', '')}</Label>
                                             <Input
                                               type="number"
                                               value={selectedExercise.sets || ''}
@@ -415,7 +476,7 @@ export default function TrainingPlans() {
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-xs">Reps</Label>
+                                            <Label className="text-xs">{t('plans.reps').replace(':', '')}</Label>
                                             <Input
                                               type="number"
                                               value={selectedExercise.reps || ''}
@@ -429,7 +490,7 @@ export default function TrainingPlans() {
                                         
                                         <div className="grid grid-cols-2 gap-2">
                                           <div>
-                                            <Label className="text-xs">Weight (kg)</Label>
+                                            <Label className="text-xs">{t('plans.weight').replace(':', '')} ({t('plans.kg')})</Label>
                                             <Input
                                               type="number"
                                               step="0.5"
@@ -441,7 +502,7 @@ export default function TrainingPlans() {
                                             />
                                           </div>
                                           <div>
-                                            <Label className="text-xs">Rest (sec)</Label>
+                                            <Label className="text-xs">{t('plans.rest').replace(':', '')} ({t('plans.sec')})</Label>
                                             <Input
                                               type="number"
                                               value={selectedExercise.restTime || ''}
@@ -454,7 +515,7 @@ export default function TrainingPlans() {
                                         </div>
                                         
                                         <div>
-                                          <Label className="text-xs">Notes</Label>
+                                          <Label className="text-xs">{t('plans.notes').replace(':', '')}</Label>
                                           <Textarea
                                             value={selectedExercise.notes || ''}
                                             onChange={(e) => handleExerciseDetailChange(week, day, selectedExercise.exerciseId, 'notes', e.target.value)}
@@ -482,13 +543,159 @@ export default function TrainingPlans() {
                   variant="outline" 
                   onClick={resetForm}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button 
                   type="submit" 
                   disabled={createPlanMutation.isPending}
                 >
-                  {createPlanMutation.isPending ? "Creating..." : "Create Plan"}
+                  {createPlanMutation.isPending ? t('plans.creating') : t('plans.createPlan')}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit Training Plan Form */}
+      {editingPlan && (
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>Edit Training Plan</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setEditingPlan(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdatePlan} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="edit-plan-name">{t('plans.planName')}</Label>
+                  <Input 
+                    id="edit-plan-name" 
+                    name="name" 
+                    defaultValue={editingPlan.name}
+                    placeholder={t('plans.planNamePlaceholder')} 
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-goal">{t('plans.goal')}</Label>
+                  <Select value={editGoal} onValueChange={setEditGoal} required>
+                    <SelectTrigger data-testid="select-edit-goal">
+                      <SelectValue placeholder={t('plans.selectGoal')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="weight_loss">{t('plans.weightLoss')}</SelectItem>
+                      <SelectItem value="muscle_gain">{t('plans.muscleGain')}</SelectItem>
+                      <SelectItem value="endurance">{t('plans.endurance')}</SelectItem>
+                      <SelectItem value="strength">{t('plans.strength')}</SelectItem>
+                      <SelectItem value="general_fitness">{t('plans.generalFitness')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-description">{t('plans.description')}</Label>
+                <Textarea 
+                  id="edit-description" 
+                  name="description" 
+                  defaultValue={editingPlan.description || ''}
+                  placeholder={t('plans.descriptionPlaceholder')} 
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <Label htmlFor="edit-duration">{t('plans.duration')}</Label>
+                  <Select value={editDuration} onValueChange={setEditDuration} required>
+                    <SelectTrigger data-testid="select-edit-duration">
+                      <SelectValue placeholder={t('plans.selectDuration')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="4">{t('plans.fourWeeks')}</SelectItem>
+                      <SelectItem value="8">{t('plans.eightWeeks')}</SelectItem>
+                      <SelectItem value="12">{t('plans.twelveWeeks')}</SelectItem>
+                      <SelectItem value="0">{t('plans.tillGoal')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-weekCycle">{t('plans.weekCycle')}</Label>
+                  <Select value={editWeekCycle} onValueChange={setEditWeekCycle} required>
+                    <SelectTrigger data-testid="select-edit-weekCycle">
+                      <SelectValue placeholder={t('plans.selectWeekCycle')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">{t('plans.oneWeek')}</SelectItem>
+                      <SelectItem value="2">{t('plans.twoWeeks')}</SelectItem>
+                      <SelectItem value="3">{t('plans.threeWeeks')}</SelectItem>
+                      <SelectItem value="4">{t('plans.fourWeeksCycle')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-dailyCalories">{t('plans.dailyCalories')}</Label>
+                  <Input 
+                    id="edit-dailyCalories" 
+                    name="dailyCalories" 
+                    type="number"
+                    defaultValue={editingPlan.dailyCalories || ''}
+                    placeholder="2000" 
+                    min="1000"
+                    max="5000"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="edit-protein">{t('plans.protein')} (g)</Label>
+                  <Input 
+                    id="edit-protein" 
+                    name="protein" 
+                    type="number"
+                    defaultValue={editingPlan.protein || ''}
+                    placeholder="150" 
+                    min="50"
+                    max="300"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-carbs">{t('plans.carbs')} (g)</Label>
+                  <Input 
+                    id="edit-carbs" 
+                    name="carbs" 
+                    type="number"
+                    defaultValue={editingPlan.carbs || ''}
+                    placeholder="200" 
+                    min="50"
+                    max="400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setEditingPlan(null)}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={updatePlanMutation.isPending}
+                >
+                  {updatePlanMutation.isPending ? 'Updating...' : 'Update Plan'}
                 </Button>
               </div>
             </form>
@@ -506,7 +713,7 @@ export default function TrainingPlans() {
                   <div>
                     <CardTitle className="text-lg">{plan.name}</CardTitle>
                     <p className="text-sm text-gray-500">
-                      {plan.duration === 0 ? 'Till goal is met' : `${plan.duration} weeks`}
+                      {plan.duration === 0 ? t('plans.tillGoal') : `${plan.duration} ${plan.duration === 1 ? t('plans.week') : t('plans.weeks')}`}
                     </p>
                   </div>
                   <Badge variant={plan.isActive ? "default" : "secondary"}>
@@ -519,34 +726,34 @@ export default function TrainingPlans() {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-gray-500">Goal:</span>
-                    <div className="font-medium">{plan.goal || "Not specified"}</div>
+                    <span className="text-gray-500">{t('plans.goal')}:</span>
+                    <div className="font-medium">{plan.goal || t('plans.notSpecified')}</div>
                   </div>
                   <div>
-                    <span className="text-gray-500">Duration:</span>
+                    <span className="text-gray-500">{t('plans.duration')}:</span>
                     <div className="font-medium">
-                      {plan.duration === 0 ? 'Till goal is met' : `${plan.duration} weeks`}
+                      {plan.duration === 0 ? t('plans.tillGoal') : `${plan.duration} ${plan.duration === 1 ? t('plans.week') : t('plans.weeks')}`}
                     </div>
                   </div>
                   <div>
-                    <span className="text-gray-500">Week Cycle:</span>
-                    <div className="font-medium">{plan.weekCycle || 1} week{(plan.weekCycle || 1) > 1 ? 's' : ''}</div>
+                    <span className="text-gray-500">{t('plans.weekCycle')}:</span>
+                    <div className="font-medium">{plan.weekCycle || 1} {(plan.weekCycle || 1) === 1 ? t('plans.week') : t('plans.weeks')}</div>
                   </div>
                   {plan.dailyCalories && (
                     <div>
-                      <span className="text-gray-500">Daily Calories:</span>
-                      <div className="font-medium">{plan.dailyCalories} kcal</div>
+                      <span className="text-gray-500">{t('plans.dailyCalories')}:</span>
+                      <div className="font-medium">{plan.dailyCalories} {t('plans.kcal')}</div>
                     </div>
                   )}
                   {plan.protein && (
                     <div>
-                      <span className="text-gray-500">Protein:</span>
+                      <span className="text-gray-500">{t('plans.protein')}:</span>
                       <div className="font-medium">{plan.protein}g</div>
                     </div>
                   )}
                   {plan.carbs && (
                     <div>
-                      <span className="text-gray-500">Carbs:</span>
+                      <span className="text-gray-500">{t('plans.carbohydrates')}:</span>
                       <div className="font-medium">{plan.carbs}g</div>
                     </div>
                   )}
@@ -559,16 +766,21 @@ export default function TrainingPlans() {
                       size="sm"
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      View Details
+                      {t('plans.viewDetails')}
                     </Button>
                   </Link>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" data-testid="button-edit-plan" onClick={() => {
+                    setEditingPlan(plan);
+                    setEditGoal(plan.goal || "");
+                    setEditDuration(plan.duration?.toString() || "");
+                    setEditWeekCycle(plan.weekCycle?.toString() || "");
+                  }}>
                     <Edit className="h-4 w-4 mr-1" />
-                    Edit
+                    {t('plans.edit')}
                   </Button>
                   <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600">
                     <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
+                    {t('plans.delete')}
                   </Button>
 
                 </div>
@@ -615,9 +827,9 @@ export default function TrainingPlans() {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold mb-2">Plan Details</h3>
                 <div className="space-y-2 text-sm">
-                  <div><span className="text-gray-500">Duration:</span> <span className="font-medium">{selectedPlan.duration} weeks</span></div>
-                  <div><span className="text-gray-500">Goal:</span> <span className="font-medium">{selectedPlan.goal || "Not specified"}</span></div>
-                  <div><span className="text-gray-500">Status:</span> <Badge variant={selectedPlan.isActive ? "default" : "secondary"}>{selectedPlan.isActive ? "Active" : "Draft"}</Badge></div>
+                  <div><span className="text-gray-500">{t('plans.duration')}:</span> <span className="font-medium">{selectedPlan.duration} {t('plans.weeks')}</span></div>
+                  <div><span className="text-gray-500">{t('plans.goal')}:</span> <span className="font-medium">{selectedPlan.goal || t('plans.notSpecified')}</span></div>
+                  <div><span className="text-gray-500">Status:</span> <Badge variant={selectedPlan.isActive ? "default" : "secondary"}>{selectedPlan.isActive ? t('plans.active') : t('plans.draft')}</Badge></div>
                 </div>
               </div>
 
@@ -625,15 +837,15 @@ export default function TrainingPlans() {
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="font-semibold mb-2">Nutrition</h3>
                   <div className="space-y-2 text-sm">
-                    <div><span className="text-gray-500">Daily Calories:</span> <span className="font-medium">{selectedPlan.dailyCalories} kcal</span></div>
-                    {selectedPlan.protein && <div><span className="text-gray-500">Protein:</span> <span className="font-medium">{selectedPlan.protein}g</span></div>}
+                    <div><span className="text-gray-500">{t('plans.dailyCalories')}:</span> <span className="font-medium">{selectedPlan.dailyCalories} {t('plans.kcal')}</span></div>
+                    {selectedPlan.protein && <div><span className="text-gray-500">{t('plans.protein')}:</span> <span className="font-medium">{selectedPlan.protein}g</span></div>}
                     {selectedPlan.carbs && <div><span className="text-gray-500">Carbs:</span> <span className="font-medium">{selectedPlan.carbs}g</span></div>}
                   </div>
                 </div>
               )}
 
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-2">Created</h3>
+                <h3 className="font-semibold mb-2">{t('plans.created')}</h3>
                 <div className="text-sm">
                   <div className="text-gray-500">
                     {selectedPlan.createdAt ? new Date(selectedPlan.createdAt).toLocaleDateString() : "Recently"}
@@ -643,7 +855,7 @@ export default function TrainingPlans() {
             </div>
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h3 className="font-semibold mb-2 text-yellow-800">Exercises</h3>
+              <h3 className="font-semibold mb-2 text-yellow-800">{t('plans.exercises')}</h3>
               <p className="text-yellow-700 text-sm">
                 Exercise details and workout schedule will be displayed here once the full exercise viewing system is implemented.
                 This plan currently stores exercises in the database and can be assigned to clients.
@@ -655,7 +867,7 @@ export default function TrainingPlans() {
                 Close
               </Button>
               <Button>
-                Edit Plan
+                {t('plans.editPlan')}
               </Button>
             </div>
           </div>

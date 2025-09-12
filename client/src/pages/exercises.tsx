@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,20 +12,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { Plus, Edit, Trash2, Play, Upload, Dumbbell } from "lucide-react";
+import { Plus, Edit, Trash2, Play, Upload, Dumbbell, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Exercises() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [editingExercise, setEditingExercise] = useState<any>(null);
+  const [editCategory, setEditCategory] = useState<string>("");
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
+        title: t('exercises.unauthorized'),
+        description: t('exercises.loggedOutRetry'),
         variant: "destructive",
       });
       setTimeout(() => {
@@ -45,8 +49,8 @@ export default function Exercises() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Exercise created successfully",
+        title: t('exercises.success'),
+        description: t('exercises.exerciseCreated'),
       });
       setShowCreateForm(false);
       queryClient.invalidateQueries({ queryKey: ["/api/exercises"] });
@@ -54,8 +58,8 @@ export default function Exercises() {
     onError: (error) => {
       if (isUnauthorizedError(error)) {
         toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
+          title: t('exercises.unauthorized'),
+          description: t('exercises.loggedOutRetry'),
           variant: "destructive",
         });
         setTimeout(() => {
@@ -64,8 +68,40 @@ export default function Exercises() {
         return;
       }
       toast({
-        title: "Error",
-        description: "Failed to create exercise",
+        title: t('exercises.error'),
+        description: t('exercises.failedToCreateExercise'),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateExerciseMutation = useMutation({
+    mutationFn: async ({ id, ...data }: any) => {
+      await apiRequest("PUT", `/api/exercises/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: t('exercises.success'),
+        description: t('exercises.exerciseUpdated'),
+      });
+      setEditingExercise(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/exercises"] });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: t('exercises.unauthorized'),
+          description: t('exercises.loggedOutRetry'),
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: t('exercises.error'),
+        description: t('exercises.failedToUpdateExercise'),
         variant: "destructive",
       });
     },
@@ -77,15 +113,15 @@ export default function Exercises() {
     },
     onSuccess: () => {
       toast({
-        title: "Success",
-        description: "Exercise media uploaded successfully",
+        title: t('exercises.success'),
+        description: t('exercises.exerciseMediaUploaded'),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/exercises"] });
     },
     onError: (error) => {
       toast({
-        title: "Error",
-        description: "Failed to upload exercise media",
+        title: t('exercises.error'),
+        description: t('exercises.failedToUploadMedia'),
         variant: "destructive",
       });
     },
@@ -102,6 +138,20 @@ export default function Exercises() {
     };
 
     createExerciseMutation.mutate(data);
+  };
+
+  const handleUpdateExercise = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    const data = {
+      id: editingExercise.id,
+      name: formData.get('name') as string,
+      description: formData.get('description') as string,
+      category: editCategory,
+    };
+
+    updateExerciseMutation.mutate(data);
   };
 
   const handleGetUploadParameters = async () => {
@@ -138,8 +188,8 @@ export default function Exercises() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600">Only trainers can access this page.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('exercises.accessDenied')}</h1>
+          <p className="text-gray-600">{t('exercises.onlyTrainersAccess')}</p>
         </div>
       </div>
     );
@@ -148,10 +198,10 @@ export default function Exercises() {
   return (
     <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Exercise Library</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('exercises.library')}</h1>
         <Button onClick={() => setShowCreateForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Exercise
+          {t('exercises.addExercise')}
         </Button>
       </div>
 
@@ -166,7 +216,7 @@ export default function Exercises() {
                 size="sm"
                 onClick={() => setSelectedCategory(category)}
               >
-                {category.charAt(0).toUpperCase() + category.slice(1)}
+                {t(`exercises.categories.${category}`)}
               </Button>
             ))}
           </div>
@@ -176,37 +226,37 @@ export default function Exercises() {
       {showCreateForm && (
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Add New Exercise</CardTitle>
+            <CardTitle>{t('exercises.addNewExercise')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateExercise} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="name">Exercise Name</Label>
-                  <Input id="name" name="name" placeholder="e.g., Push-ups" required />
+                  <Label htmlFor="name">{t('exercises.exerciseName')}</Label>
+                  <Input id="name" name="name" placeholder={t('exercises.exercisePlaceholder')} required />
                 </div>
                 <div>
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category">{t('exercises.category')}</Label>
                   <Select name="category" required>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder={t('exercises.selectCategory')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="strength">Strength</SelectItem>
-                      <SelectItem value="cardio">Cardio</SelectItem>
-                      <SelectItem value="flexibility">Flexibility</SelectItem>
-                      <SelectItem value="sports">Sports</SelectItem>
+                      <SelectItem value="strength">{t('exercises.categories.strength')}</SelectItem>
+                      <SelectItem value="cardio">{t('exercises.categories.cardio')}</SelectItem>
+                      <SelectItem value="flexibility">{t('exercises.categories.flexibility')}</SelectItem>
+                      <SelectItem value="sports">{t('exercises.categories.sports')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{t('exercises.description')}</Label>
                 <Textarea 
                   id="description" 
                   name="description" 
-                  placeholder="Describe how to perform this exercise..." 
+                  placeholder={t('exercises.descriptionPlaceholder')} 
                   rows={4}
                   required
                 />
@@ -218,13 +268,84 @@ export default function Exercises() {
                   variant="outline" 
                   onClick={() => setShowCreateForm(false)}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button 
                   type="submit" 
                   disabled={createExerciseMutation.isPending}
                 >
-                  {createExerciseMutation.isPending ? "Creating..." : "Add Exercise"}
+                  {createExerciseMutation.isPending ? t('exercises.creating') : t('exercises.addExercise')}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit Exercise Form */}
+      {editingExercise && (
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>Edit Exercise</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setEditingExercise(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateExercise} className="space-y-4">
+              <div>
+                <Label htmlFor="edit-name">{t('exercises.exerciseName')}</Label>
+                <Input 
+                  id="edit-name" 
+                  name="name" 
+                  defaultValue={editingExercise.name}
+                  placeholder={t('exercises.exercisePlaceholder')} 
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-category">{t('exercises.category')}</Label>
+                <Select value={editCategory} onValueChange={setEditCategory} required>
+                  <SelectTrigger data-testid="select-edit-category">
+                    <SelectValue placeholder={t('exercises.selectCategory')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="strength">{t('exercises.categories.strength')}</SelectItem>
+                    <SelectItem value="cardio">{t('exercises.categories.cardio')}</SelectItem>
+                    <SelectItem value="flexibility">{t('exercises.categories.flexibility')}</SelectItem>
+                    <SelectItem value="sports">{t('exercises.categories.sports')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-description">{t('exercises.description')}</Label>
+                <Textarea 
+                  id="edit-description" 
+                  name="description" 
+                  defaultValue={editingExercise.description}
+                  placeholder={t('exercises.descriptionPlaceholder')} 
+                  rows={4}
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setEditingExercise(null)}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={updateExerciseMutation.isPending}
+                >
+                  {updateExerciseMutation.isPending ? 'Updating...' : 'Update Exercise'}
                 </Button>
               </div>
             </form>
@@ -242,11 +363,14 @@ export default function Exercises() {
                   <div>
                     <CardTitle className="text-lg">{exercise.name}</CardTitle>
                     <Badge variant="outline" className="mt-1">
-                      {exercise.category}
+                      {t(`exercises.categories.${exercise.category}`)}
                     </Badge>
                   </div>
                   <div className="flex space-x-1">
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" data-testid="button-edit-exercise" onClick={() => {
+                      setEditingExercise(exercise);
+                      setEditCategory(exercise.category);
+                    }}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600">
@@ -283,7 +407,7 @@ export default function Exercises() {
                     >
                       <div className="text-center">
                         <Upload className="h-6 w-6 mx-auto mb-2 text-gray-400" />
-                        <span className="text-sm text-gray-500">Upload Media</span>
+                        <span className="text-sm text-gray-500">{t('exercises.uploadMedia')}</span>
                       </div>
                     </ObjectUploader>
                   </div>
@@ -293,12 +417,12 @@ export default function Exercises() {
 
                 <div className="flex justify-between items-center">
                   <Button variant="outline" size="sm">
-                    Add to Plan
+                    {t('exercises.addToPlan')}
                   </Button>
                   {exercise.mediaUrl && (
                     <Button variant="ghost" size="sm">
                       <Play className="h-4 w-4 mr-1" />
-                      View
+                      {t('exercises.view')}
                     </Button>
                   )}
                 </div>
@@ -309,17 +433,17 @@ export default function Exercises() {
           <div className="col-span-full text-center py-12">
             <Dumbbell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {selectedCategory === "all" ? "No exercises yet" : `No ${selectedCategory} exercises`}
+              {selectedCategory === "all" ? t('exercises.noExercises') : t('exercises.noCategoryExercises', { category: t(`exercises.categories.${selectedCategory}`) })}
             </h3>
             <p className="text-gray-500 mb-4">
               {selectedCategory === "all" 
-                ? "Start building your exercise library"
-                : `Add some ${selectedCategory} exercises to get started`
+                ? t('exercises.startBuildingLibrary')
+                : t('exercises.addSomeExercises', { category: t(`exercises.categories.${selectedCategory}`) })
               }
             </p>
             <Button onClick={() => setShowCreateForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Your First Exercise
+              {t('exercises.addYourFirstExercise')}
             </Button>
           </div>
         )}

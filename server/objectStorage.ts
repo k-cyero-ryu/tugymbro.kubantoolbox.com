@@ -188,23 +188,33 @@ export class ObjectStorageService {
       return rawPath;
     }
   
-    // Extract the path from the URL by removing query parameters and domain
-    const url = new URL(rawPath);
-    const rawObjectPath = url.pathname;
-  
-    // For Google Cloud Storage URLs, the path structure is /{bucketName}/{objectPath}
-    // We need to extract just the object path portion after the bucket name
-    const pathParts = rawObjectPath.split('/');
-    if (pathParts.length < 3) {
+    try {
+      // Extract the path from the URL by removing query parameters and domain
+      const url = new URL(rawPath);
+      const rawObjectPath = url.pathname;
+    
+      // For Google Cloud Storage URLs, the path structure is /{bucketName}/{objectPath}
+      // We need to extract just the object path portion after the bucket name
+      const pathParts = rawObjectPath.split('/');
+      if (pathParts.length < 3) {
+        return rawPath;
+      }
+      
+      // Skip the first empty element and bucket name, get the object path
+      const objectPath = pathParts.slice(2).join('/');
+      
+      // Handle the .private/ prefix - remove it since our serving route handles this
+      const cleanObjectPath = objectPath.startsWith('.private/') 
+        ? objectPath.substring('.private/'.length)
+        : objectPath;
+      
+      // Convert to our normalized format
+      const normalizedPath = `/objects/${cleanObjectPath}`;
+      return normalizedPath;
+    } catch (error) {
+      console.error("Error normalizing object path:", error);
       return rawPath;
     }
-    
-    // Skip the first empty element and bucket name, get the object path
-    const objectPath = pathParts.slice(2).join('/');
-    
-    // Convert to our normalized format
-    const normalizedPath = `/objects/${objectPath}`;
-    return normalizedPath;
   }
 
   // Tries to set the ACL policy for the object entity and return the normalized path.

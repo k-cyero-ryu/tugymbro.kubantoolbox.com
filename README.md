@@ -5,15 +5,27 @@ A comprehensive, multi-lingual web application that connects personal trainers w
 ## 🚀 Features
 
 - **Multi-Role System**: SuperAdmin, Trainer, and Client roles with role-based access control
-- **Training Management**: Create and manage customized training plans and exercises
-- **Progress Tracking**: Detailed progress monitoring and monthly evaluations
-- **Real-time Communication**: WebSocket-based chat system
+- **Training Management**: Create and manage customized training plans with detailed exercises, sets, reps, and weights
+- **Daily Workout Tracking**: Complete workout tracking with exercise timers and progress logging
+- **Progress Monitoring**: Comprehensive monthly evaluations with body measurements and T-pose photo analysis
+- **Real-time Communication**: WebSocket-based chat system with message history
 - **Multi-language Support**: English, Spanish, French, and Portuguese
-- **Visual Intelligence**: T-pose photo analysis for body measurements
-- **File Management**: Secure file upload and storage for exercise media
+- **Visual Intelligence**: T-pose photo analysis for body measurements and progress comparison
+- **Exercise Media Management**: Secure upload and storage for exercise videos, images, and documents with access control
+- **Referral System**: Trainer referral codes for automatic client-trainer assignment
+- **Payment Plan Management**: SuperAdmin manages trainer plans, trainers manage client plans
 - **Responsive Design**: Mobile-friendly interface with modern UI components
 - **Password Reset**: SuperAdmin can reset passwords for any user
-- **User Management**: Comprehensive user administration tools
+- **User Management**: Comprehensive user administration with search and filtering
+- **Analytics & Reporting**: System statistics, trainer analytics, and client progress reports
+
+### File Storage & Privacy
+
+The application uses Google Cloud Storage with a sophisticated access control system:
+- **Exercise Media**: Private by default, accessible only to trainers and their assigned clients
+- **T-pose Evaluation Photos**: Made public for accessibility and comparison features
+- **User Profiles**: Private assets protected by role-based access control
+- **Public Assets**: Served via `/public-objects/` route with appropriate caching headers
 
 ## 🛠 Tech Stack
 
@@ -285,40 +297,46 @@ To change your database connection:
 
 The database schema is defined in `shared/schema.ts` using Drizzle ORM. Key tables include:
 
-- `users` - User accounts and authentication (username, password, role, status)
-- `trainers` - Trainer profiles and referral codes
-- `clients` - Client profiles and trainer assignments
-- `training_plans` - Workout plans and routines
-- `exercises` - Exercise library and media
-- `evaluations` - Progress tracking and assessments
-- `chat_messages` - Real-time messaging
-- `sessions` - User session storage
+- `users` - User accounts with username/password authentication, roles, and status
+- `trainers` - Trainer profiles with referral codes, expertise, and payment plan assignments
+- `clients` - Client profiles linked to trainers with body measurements and goals
+- `training_plans` - Detailed workout plans with duration, nutrition guidelines, and exercise cycles
+- `exercises` - Exercise library with media files, categories, and trainer assignments
+- `plan_exercises` - Junction table linking exercises to training plans with specific workout details
+- `client_plans` - Assignment of training plans to specific clients
+- `workout_logs` - Daily workout tracking with completed sets, reps, and weights
+- `monthly_evaluations` - Progress assessments with body measurements and T-pose photos
+- `chat_messages` - Real-time messaging between users with read status
+- `payment_plans` - SuperAdmin-managed payment plans for trainers
+- `client_payment_plans` - Trainer-managed payment plans for clients
+- `sessions` - Secure session storage for authentication
 
 ## 👥 User Roles & Permissions
 
 ### SuperAdmin
-- Full platform access and control
-- User management (view, search, password reset)
-- Trainer approval/rejection/suspension
-- Payment plan management
-- System statistics and monitoring
-- Platform administration
+- **User Management**: View all users, search/filter, reset passwords, promote users
+- **Trainer Management**: Approve/reject/suspend trainer applications, manage trainer payment plans
+- **Platform Administration**: System statistics, platform monitoring, payment plan creation
+- **Global Access**: View all clients, training plans, exercises, and evaluations across the platform
+- **Communication**: Chat with any user on the platform
 
 ### Trainer
-- Client management and assignment
-- Training plan creation and management
-- Exercise library management
-- Progress tracking and evaluations
-- Real-time chat with clients
-- Revenue and payment tracking
+- **Client Management**: View and manage assigned clients, suspend/reactivate clients
+- **Training Plans**: Create, edit, and assign customized training plans with detailed exercises
+- **Exercise Library**: Create and manage exercise database with media uploads
+- **Progress Tracking**: Monitor client evaluations, workout logs, and body measurements
+- **Payment Plans**: Create and assign payment plans to clients
+- **Communication**: Real-time chat with clients and SuperAdmins
+- **Analytics**: View client statistics, progress reports, and revenue tracking
+- **Referral System**: Unique referral codes for client acquisition
 
 ### Client
-- View assigned training plans
-- Daily workout tracking
-- Progress monitoring and evaluations
-- Real-time chat with trainer
-- Profile management
-- Goal setting and tracking
+- **Training Plans**: View assigned plans, daily workouts with exercise details
+- **Workout Tracking**: Log completed exercises with sets, reps, weights, and exercise timers
+- **Progress Monitoring**: Monthly evaluations with body measurements and T-pose photos
+- **Communication**: Real-time chat with assigned trainer
+- **Profile Management**: Update personal information, goals, and preferences
+- **Progress Analytics**: View workout streaks, weekly stats, and progress comparisons
 
 ## 🔧 Production Deployment
 

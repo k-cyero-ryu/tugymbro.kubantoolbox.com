@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import Chat from "@/components/chat";
 export default function Clients() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -50,8 +52,8 @@ export default function Clients() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({
-      title: "Copied!",
-      description: "Link copied to clipboard",
+      title: t('clients.copied'),
+      description: t('clients.linkCopied'),
     });
   };
 
@@ -85,8 +87,8 @@ export default function Clients() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600">Only trainers can access this page.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('clients.accessDenied')}</h1>
+          <p className="text-gray-600">{t('clients.trainersOnly')}</p>
         </div>
       </div>
     );
@@ -95,22 +97,22 @@ export default function Clients() {
   return (
     <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-8 flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Client Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('clients.clientManagement')}</h1>
         <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Invite Client
+              {t('clients.inviteClient')}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Share Your Referral Information</DialogTitle>
+              <DialogTitle>{t('clients.shareReferralInfo')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-6">
               <div className="space-y-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Registration URL</Label>
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">{t('clients.registrationUrl')}</Label>
                   <div className="flex items-center space-x-2">
                     <Input
                       value={referralUrl}
@@ -126,12 +128,12 @@ export default function Clients() {
                     </Button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Share this link directly with clients to register
+                    {t('clients.shareLink')}
                   </p>
                 </div>
                 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2 block">Trainer Code</Label>
+                  <Label className="text-sm font-medium text-gray-700 mb-2 block">{t('clients.trainerCode')}</Label>
                   <div className="flex items-center space-x-2">
                     <Input
                       value={referralCode}
@@ -147,7 +149,7 @@ export default function Clients() {
                     </Button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Clients can enter this code manually during registration
+                    {t('clients.manualCode')}
                   </p>
                 </div>
               </div>
@@ -158,10 +160,10 @@ export default function Clients() {
                   onClick={() => window.open(referralUrl, '_blank')}
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  Test Link
+                  {t('clients.testLink')}
                 </Button>
                 <Button onClick={() => setShowInviteDialog(false)}>
-                  Done
+                  {t('clients.done')}
                 </Button>
               </div>
             </div>
@@ -174,34 +176,34 @@ export default function Clients() {
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Input
-              placeholder="Search clients..."
+              placeholder={t('clients.searchClients')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All Status" />
+                <SelectValue placeholder={t('clients.allStatus')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="all">{t('clients.allStatus')}</SelectItem>
+                <SelectItem value="active">{t('clients.active')}</SelectItem>
+                <SelectItem value="inactive">{t('clients.inactive')}</SelectItem>
               </SelectContent>
             </Select>
             <Select>
               <SelectTrigger>
-                <SelectValue placeholder="All Plans" />
+                <SelectValue placeholder={t('clients.allPlans')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Plans</SelectItem>
-                <SelectItem value="weight-loss">Weight Loss</SelectItem>
-                <SelectItem value="muscle-gain">Muscle Gain</SelectItem>
-                <SelectItem value="strength">Strength Training</SelectItem>
+                <SelectItem value="all">{t('clients.allPlans')}</SelectItem>
+                <SelectItem value="weight-loss">{t('clients.weightLoss')}</SelectItem>
+                <SelectItem value="muscle-gain">{t('clients.muscleGain')}</SelectItem>
+                <SelectItem value="strength">{t('clients.strengthTraining')}</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline">
               <Filter className="h-4 w-4 mr-2" />
-              Filter
+              {t('clients.filter')}
             </Button>
           </div>
         </CardContent>
@@ -210,7 +212,7 @@ export default function Clients() {
       {/* Client List */}
       <Card>
         <CardHeader>
-          <CardTitle>Your Clients ({filteredClients?.length || 0})</CardTitle>
+          <CardTitle>{t('clients.yourClients')} ({filteredClients?.length || 0})</CardTitle>
         </CardHeader>
         <CardContent>
           {filteredClients && filteredClients.length > 0 ? (
@@ -218,11 +220,11 @@ export default function Clients() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Progress</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('clients.client')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('clients.plan')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('clients.progress')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('clients.status')}</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('clients.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -242,38 +244,38 @@ export default function Clients() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{client.bodyGoal || 'No plan assigned'}</div>
+                        <div className="text-sm text-gray-900">{client.bodyGoal || t('clients.noPlanAssigned')}</div>
                         <div className="text-sm text-gray-500">
-                          Started {new Date(client.createdAt).toLocaleDateString()}
+                          {t('clients.started')} {new Date(client.createdAt).toLocaleDateString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">75% Complete</div>
+                        <div className="text-sm text-gray-900">75% {t('clients.complete')}</div>
                         <Progress value={75} className="w-full mt-1" />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge 
                           variant={client.user?.status === 'active' ? 'default' : 'secondary'}
                         >
-                          {client.user?.status === 'active' ? 'Active' : 'Inactive'}
+                          {client.user?.status === 'active' ? t('clients.active') : t('clients.inactive')}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div className="flex space-x-2">
                           <Link href={`/clients/${client.id}`}>
-                            <Button variant="ghost" size="sm" title="View Details">
+                            <Button variant="ghost" size="sm" title={t('clients.viewDetails')}>
                               <Eye className="h-4 w-4" />
                             </Button>
                           </Link>
                           <Link href={`/clients/${client.id}/edit`}>
-                            <Button variant="ghost" size="sm" title="Edit Client">
+                            <Button variant="ghost" size="sm" title={t('clients.editClient')}>
                               <Edit className="h-4 w-4" />
                             </Button>
                           </Link>
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            title="Message Client"
+                            title={t('clients.messageClient')}
                             onClick={() => openChatWithClient(client.userId)}
                           >
                             <MessageCircle className="h-4 w-4" />
@@ -288,17 +290,17 @@ export default function Clients() {
           ) : (
             <div className="text-center py-12">
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No clients found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{t('clients.noClientsFound')}</h3>
               <p className="text-gray-500 mb-4">
                 {searchTerm || statusFilter !== "all" 
-                  ? "Try adjusting your search or filters"
-                  : "Start building your client base by inviting new clients"
+                  ? t('clients.adjustFilters')
+                  : t('clients.buildClientBase')
                 }
               </p>
               {!searchTerm && statusFilter === "all" && (
                 <Button>
                   <Plus className="h-4 w-4 mr-2" />
-                  Invite Your First Client
+                  {t('clients.inviteFirstClient')}
                 </Button>
               )}
             </div>
@@ -313,7 +315,7 @@ export default function Clients() {
             <DialogTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5" />
-                Chat with Client
+                {t('clients.chatWithClient')}
               </span>
               <Button
                 variant="ghost"

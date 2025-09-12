@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 ### Backend
 - **Runtime**: Node.js with Express.js (TypeScript, ESM modules).
 - **API Design**: RESTful API with WebSocket support for real-time chat.
-- **Authentication**: Replit's OIDC-based authentication with session management.
+- **Authentication**: Username/Password authentication with bcrypt hashing and session-based management.
 - **Middleware**: Custom logging, error handling, and authentication.
 
 ### Data Storage
@@ -33,10 +33,11 @@ Preferred communication style: Simple, everyday language.
 - **Schema**: Comprehensive schema covering users, trainers, clients, training plans, exercises, evaluations, chat, and progress.
 
 ### Authentication and Authorization
-- **Provider**: Replit's OpenID Connect (OIDC).
+- **Authentication**: Username/Password authentication with bcrypt hashing and secure session management.
 - **Session Management**: Secure HTTP-only cookies with PostgreSQL session storage.
 - **Role-Based Access Control**: Three-tier permission system (SuperAdmin, Trainer, Client).
 - **Authorization**: Route-level protection with role-based access validation.
+- **Password Security**: 12-round bcrypt hashing with session-based authentication.
 
 ### System Design Choices
 - **Monorepo Structure**: Shared TypeScript schemas between client and server for type safety.
@@ -48,7 +49,6 @@ Preferred communication style: Simple, everyday language.
 - **Cloud Services**:
     - Neon Database (PostgreSQL hosting)
     - Google Cloud Storage (file storage)
-    - Replit's authentication service
 - **UI Libraries**: Radix UI primitives with shadcn/ui
 - **Development Tools**: Vite
 - **File Upload**: Uppy (with AWS S3 multipart upload for compatibility, though Google Cloud Storage is the primary storage)

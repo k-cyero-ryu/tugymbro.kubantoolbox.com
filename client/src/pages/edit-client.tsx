@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from "@/lib/queryClient";
 import { useRoute, Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,14 +48,14 @@ const formatCurrency = (amount: number, currency: string = "USD") => {
   }).format(amount);
 };
 
-const formatBillingCycle = (type: string) => {
+const formatBillingCycle = (type: string, t: any) => {
   switch (type) {
     case "monthly":
-      return "Monthly";
+      return t('editClient.monthly');
     case "weekly":
-      return "Weekly";
+      return t('editClient.weekly');
     case "per_session":
-      return "Per Session";
+      return t('editClient.perSession');
     default:
       return type;
   }
@@ -63,6 +64,7 @@ const formatBillingCycle = (type: string) => {
 export default function EditClient() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [match, params] = useRoute("/clients/:clientId/edit");
@@ -136,14 +138,14 @@ export default function EditClient() {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
       queryClient.invalidateQueries({ queryKey: ["/api/trainers/clients"] });
       toast({
-        title: "Success",
-        description: "Client updated successfully",
+        title: t('editClient.success'),
+        description: t('editClient.clientUpdated'),
       });
       setLocation(`/clients/${clientId}`);
     },
     onError: (error) => {
       toast({
-        title: "Error",
+        title: t('editClient.error'),
         description: error.message,
         variant: "destructive",
       });
@@ -185,7 +187,7 @@ export default function EditClient() {
             <Link href="/clients">
               <Button className="mt-4">
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Clients
+                {t('editClient.backToClients')}
               </Button>
             </Link>
           </CardContent>
@@ -214,7 +216,7 @@ export default function EditClient() {
           <Link href={`/clients/${clientId}`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Client
+              {t('editClient.backToClient')}
             </Button>
           </Link>
           <div className="flex items-center gap-3">
@@ -223,7 +225,7 @@ export default function EditClient() {
               <AvatarFallback>{getUserInitials()}</AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl font-bold">Edit {getUserDisplayName()}</h1>
+              <h1 className="text-2xl font-bold">{t('editClient.editClient', { name: getUserDisplayName() })}</h1>
               <p className="text-muted-foreground">{client.user?.email}</p>
             </div>
           </div>
@@ -235,7 +237,7 @@ export default function EditClient() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
-            Client Information
+            {t('editClient.clientInformation')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -247,11 +249,11 @@ export default function EditClient() {
                   name="age"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Age</FormLabel>
+                      <FormLabel>{t('editClient.age')}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          placeholder="Enter age"
+                          placeholder={t('editClient.enterAge')}
                           {...field}
                           value={field.value || ''}
                           onChange={(e) => field.onChange(e.target.value)}
@@ -267,11 +269,11 @@ export default function EditClient() {
                   name="height"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Height (cm)</FormLabel>
+                      <FormLabel>{t('editClient.heightCm')}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          placeholder="Enter height in cm"
+                          placeholder={t('editClient.enterHeight')}
                           {...field}
                           value={field.value || ''}
                           onChange={(e) => field.onChange(e.target.value)}
@@ -287,11 +289,11 @@ export default function EditClient() {
                   name="weight"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Weight (kg)</FormLabel>
+                      <FormLabel>{t('editClient.weightKg')}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
-                          placeholder="Enter weight in kg"
+                          placeholder={t('editClient.enterWeight')}
                           {...field}
                           value={field.value || ''}
                           onChange={(e) => field.onChange(e.target.value)}
@@ -307,18 +309,18 @@ export default function EditClient() {
                   name="clientPaymentPlanId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment Plan</FormLabel>
+                      <FormLabel>{t('editClient.paymentPlan')}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select payment plan" />
+                            <SelectValue placeholder={t('editClient.selectPaymentPlan')} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="none">No Payment Plan</SelectItem>
+                          <SelectItem value="none">{t('editClient.noPaymentPlan')}</SelectItem>
                           {paymentPlans.map((plan: any) => (
                             <SelectItem key={plan.id} value={plan.id}>
-                              {plan.name} - {formatCurrency(plan.amount, plan.currency)} ({formatBillingCycle(plan.type)})
+                              {plan.name} - {formatCurrency(plan.amount, plan.currency)} ({formatBillingCycle(plan.type, t)})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -333,17 +335,17 @@ export default function EditClient() {
                   name="paymentStatus"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment Status</FormLabel>
+                      <FormLabel>{t('editClient.paymentStatus')}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select payment status" />
+                            <SelectValue placeholder={t('editClient.selectPaymentStatus')} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="overdue">Overdue</SelectItem>
-                          <SelectItem value="suspended">Suspended</SelectItem>
+                          <SelectItem value="active">{t('editClient.active')}</SelectItem>
+                          <SelectItem value="overdue">{t('editClient.overdue')}</SelectItem>
+                          <SelectItem value="suspended">{t('editClient.suspended')}</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -357,10 +359,10 @@ export default function EditClient() {
                 name="bodyGoal"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Body Goal</FormLabel>
+                    <FormLabel>{t('editClient.bodyGoal')}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Describe the client's fitness goals..."
+                        placeholder={t('editClient.describeGoals')}
                         {...field}
                         rows={3}
                       />
@@ -373,12 +375,12 @@ export default function EditClient() {
               <div className="flex justify-end space-x-4">
                 <Link href={`/clients/${clientId}`}>
                   <Button type="button" variant="outline">
-                    Cancel
+                    {t('editClient.cancel')}
                   </Button>
                 </Link>
                 <Button type="submit" disabled={updateClientMutation.isPending}>
                   <Save className="h-4 w-4 mr-2" />
-                  {updateClientMutation.isPending ? 'Saving...' : 'Save Changes'}
+                  {updateClientMutation.isPending ? t('editClient.saving') : t('editClient.saveChanges')}
                 </Button>
               </div>
             </form>

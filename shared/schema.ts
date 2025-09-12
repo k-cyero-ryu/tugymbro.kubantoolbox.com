@@ -14,7 +14,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Session storage table (required for Replit Auth)
+// Session storage table (required for express-session)
 export const sessions = pgTable(
   "sessions",
   {
@@ -53,6 +53,15 @@ export const trainers = pgTable("trainers", {
   referralCode: varchar("referral_code").unique().notNull(),
   expertise: text("expertise"),
   experience: varchar("experience"),
+  bio: text("bio"), // Professional bio/description
+  phone: varchar("phone"),
+  location: varchar("location"),
+  address: text("address"),
+  certifications: jsonb("certifications").default('[]'), // Array of certification objects
+  specializations: jsonb("specializations").default('[]'), // Array of specialization areas
+  socialMedia: jsonb("social_media").default('{}'), // Object with social media links
+  website: varchar("website"),
+  availabilitySchedule: jsonb("availability_schedule").default('{}'), // Weekly schedule object
   gallery: jsonb("gallery").default('[]'),
   monthlyRevenue: decimal("monthly_revenue", { precision: 10, scale: 2 }).default('0'),
   paymentPlanId: varchar("payment_plan_id").references(() => paymentPlans.id), // Assigned by SuperAdmin
@@ -216,6 +225,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   sentMessages: many(chatMessages, { relationName: "sender" }),
   receivedMessages: many(chatMessages, { relationName: "receiver" }),
+  communityMemberships: many(communityMembers),
+  communitySentMessages: many(communityMessages),
 }));
 
 export const trainersRelations = relations(trainers, ({ one, many }) => ({
@@ -232,6 +243,7 @@ export const trainersRelations = relations(trainers, ({ one, many }) => ({
   exercises: many(exercises),
   posts: many(posts),
   clientPaymentPlans: many(clientPaymentPlans),
+  communityGroups: many(communityGroups),
 }));
 
 export const clientsRelations = relations(clients, ({ one, many }) => ({
@@ -447,3 +459,166 @@ export const clientPaymentPlansRelations = relations(clientPaymentPlans, ({ one,
   }),
   clients: many(clients),
 }));
+
+// Community Groups (for group chat between trainer and their clients)
+export const communityGroups = pgTable("community_groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  trainerId: varchar("trainer_id").notNull().references(() => trainers.id, { onDelete: 'cascade' }),
+  name: varchar("name").notNull(), // e.g., "John Doe's Training Community"
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Community Members (join table for users in community groups)
+export const communityMembers = pgTable("community_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => communityGroups.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: varchar("role").notNull().default("member"), // "admin" (trainer), "member" (client)
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+// Community Messages (group chat messages with file support)
+export const communityMessages = pgTable("community_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => communityGroups.id, { onDelete: 'cascade' }),
+  senderId: varchar("sender_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  message: text("message"), // Can be null if it's just a file share
+  messageType: varchar("message_type").notNull().default("text"), // "text", "file", "url"
+  // File attachment fields
+  attachmentUrl: varchar("attachment_url"), // URL to the uploaded file
+  attachmentName: varchar("attachment_name"), // Original filename
+  attachmentType: varchar("attachment_type"), // "document", "image", "video"
+  attachmentSize: integer("attachment_size"), // File size in bytes
+  // URL preview fields (for shared URLs)
+  urlPreviewTitle: varchar("url_preview_title"),
+  urlPreviewDescription: text("url_preview_description"),
+  urlPreviewImage: varchar("url_preview_image"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Social posts schema - platform-wide posts visible to all users
+export const socialPosts = pgTable("social_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  content: text("content").notNull(),
+  imageUrl: varchar("image_url"), // Optional photo/image attachment
+  imageName: varchar("image_name"),
+  imageSize: integer("image_size"),
+  likesCount: integer("likes_count").default(0),
+  commentsCount: integer("comments_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Social likes schema (many-to-many between users and posts)
+export const socialLikes = pgTable("social_likes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  postId: varchar("post_id").notNull().references(() => socialPosts.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Social comments schema
+export const socialComments = pgTable("social_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  postId: varchar("post_id").notNull().references(() => socialPosts.id, { onDelete: 'cascade' }),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Community Groups Relations
+export const communityGroupsRelations = relations(communityGroups, ({ one, many }) => ({
+  trainer: one(trainers, {
+    fields: [communityGroups.trainerId],
+    references: [trainers.id],
+  }),
+  members: many(communityMembers),
+  messages: many(communityMessages),
+}));
+
+// Community Members Relations
+export const communityMembersRelations = relations(communityMembers, ({ one }) => ({
+  group: one(communityGroups, {
+    fields: [communityMembers.groupId],
+    references: [communityGroups.id],
+  }),
+  user: one(users, {
+    fields: [communityMembers.userId],
+    references: [users.id],
+  }),
+}));
+
+// Community Messages Relations
+export const communityMessagesRelations = relations(communityMessages, ({ one }) => ({
+  group: one(communityGroups, {
+    fields: [communityMessages.groupId],
+    references: [communityGroups.id],
+  }),
+  sender: one(users, {
+    fields: [communityMessages.senderId],
+    references: [users.id],
+  }),
+}));
+
+// Social Posts Relations
+export const socialPostsRelations = relations(socialPosts, ({ one, many }) => ({
+  author: one(users, {
+    fields: [socialPosts.userId],
+    references: [users.id],
+  }),
+  likes: many(socialLikes),
+  comments: many(socialComments),
+}));
+
+// Social Likes Relations
+export const socialLikesRelations = relations(socialLikes, ({ one }) => ({
+  user: one(users, {
+    fields: [socialLikes.userId],
+    references: [users.id],
+  }),
+  post: one(socialPosts, {
+    fields: [socialLikes.postId],
+    references: [socialPosts.id],
+  }),
+}));
+
+// Social Comments Relations
+export const socialCommentsRelations = relations(socialComments, ({ one }) => ({
+  author: one(users, {
+    fields: [socialComments.userId],
+    references: [users.id],
+  }),
+  post: one(socialPosts, {
+    fields: [socialComments.postId],
+    references: [socialPosts.id],
+  }),
+}));
+
+// Community insert schemas and types (defined after tables)
+export const insertCommunityGroupSchema = createInsertSchema(communityGroups).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCommunityMemberSchema = createInsertSchema(communityMembers).omit({ id: true, joinedAt: true });
+export const insertCommunityMessageSchema = createInsertSchema(communityMessages).omit({ id: true, createdAt: true });
+
+export type InsertCommunityGroup = z.infer<typeof insertCommunityGroupSchema>;
+export type CommunityGroup = typeof communityGroups.$inferSelect;
+export type InsertCommunityMember = z.infer<typeof insertCommunityMemberSchema>;
+export type CommunityMember = typeof communityMembers.$inferSelect;
+export type InsertCommunityMessage = z.infer<typeof insertCommunityMessageSchema>;
+export type CommunityMessage = typeof communityMessages.$inferSelect;
+
+// Social insert schemas and types
+export const insertSocialPostSchema = createInsertSchema(socialPosts).omit({ id: true, createdAt: true, updatedAt: true, likesCount: true, commentsCount: true });
+export const insertSocialLikeSchema = createInsertSchema(socialLikes).omit({ id: true, createdAt: true });
+export const insertSocialCommentSchema = createInsertSchema(socialComments).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertSocialPost = z.infer<typeof insertSocialPostSchema>;
+export type SocialPost = typeof socialPosts.$inferSelect;
+export type InsertSocialLike = z.infer<typeof insertSocialLikeSchema>;
+export type SocialLike = typeof socialLikes.$inferSelect;
+export type InsertSocialComment = z.infer<typeof insertSocialCommentSchema>;
+export type SocialComment = typeof socialComments.$inferSelect;

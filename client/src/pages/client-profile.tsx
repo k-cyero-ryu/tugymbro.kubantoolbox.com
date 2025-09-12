@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from 'react-i18next';
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -12,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   User, 
   Mail, 
@@ -24,14 +26,25 @@ import {
   Save,
   Edit2,
   X,
-  Camera
+  Camera,
+  MapPin,
+  Globe,
+  Instagram,
+  Facebook,
+  Twitter,
+  Linkedin,
+  Award,
+  Star,
+  Info
 } from "lucide-react";
 
 export default function ClientProfile() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const [trainerDialogOpen, setTrainerDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -166,8 +179,8 @@ export default function ClientProfile() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">My Profile</h1>
-          <p className="text-muted-foreground">Manage your personal information and fitness goals</p>
+          <h1 className="text-3xl font-bold">{t('profile.myProfile')}</h1>
+          <p className="text-muted-foreground">{t('profile.managePersonal')}</p>
         </div>
         <div className="flex gap-2">
           {!isEditing ? (
@@ -196,7 +209,7 @@ export default function ClientProfile() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstName">First Name</Label>
+                <Label htmlFor="firstName">{t('profile.firstName')}</Label>
                 <Input
                   id="firstName"
                   name="firstName"
@@ -206,7 +219,7 @@ export default function ClientProfile() {
                 />
               </div>
               <div>
-                <Label htmlFor="lastName">Last Name</Label>
+                <Label htmlFor="lastName">{t('profile.lastName')}</Label>
                 <Input
                   id="lastName"
                   name="lastName"
@@ -219,17 +232,17 @@ export default function ClientProfile() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('profile.email')}</Label>
                 <Input
                   id="email"
                   value={clientProfile.email || ''}
                   disabled
                   className="bg-muted"
                 />
-                <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('profile.emailCannotBeChanged')}</p>
               </div>
               <div>
-                <Label htmlFor="phone">Phone Number</Label>
+                <Label htmlFor="phone">{t('profile.phoneNumber')}</Label>
                 <Input
                   id="phone"
                   name="phone"
@@ -276,7 +289,7 @@ export default function ClientProfile() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="goals">Fitness Goals</Label>
+              <Label htmlFor="goals">{t('profile.fitnessGoals')}</Label>
               <Textarea
                 id="goals"
                 name="goals"
@@ -291,7 +304,7 @@ export default function ClientProfile() {
               <div>
                 <Label htmlFor="currentWeight" className="flex items-center gap-1">
                   <Weight className="h-4 w-4" />
-                  Current Weight (kg)
+                  {t('profile.currentWeight')} (kg)
                 </Label>
                 <Input
                   id="currentWeight"
@@ -306,7 +319,7 @@ export default function ClientProfile() {
               <div>
                 <Label htmlFor="targetWeight" className="flex items-center gap-1">
                   <Target className="h-4 w-4" />
-                  Target Weight (kg)
+                  {t('profile.targetWeight')} (kg)
                 </Label>
                 <Input
                   id="targetWeight"
@@ -321,7 +334,7 @@ export default function ClientProfile() {
               <div>
                 <Label htmlFor="height" className="flex items-center gap-1">
                   <Ruler className="h-4 w-4" />
-                  Height (cm)
+                  {t('profile.height')} (cm)
                 </Label>
                 <Input
                   id="height"
@@ -337,11 +350,11 @@ export default function ClientProfile() {
             <div>
               <Label htmlFor="activityLevel" className="flex items-center gap-1">
                 <Activity className="h-4 w-4" />
-                Activity Level
+                {t('profile.activityLevel')}
               </Label>
               <Select name="activityLevel" defaultValue={clientProfile.activityLevel || 'moderate'} disabled={!isEditing}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select activity level" />
+                  <SelectValue placeholder={t('profile.selectActivityLevel')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sedentary">Sedentary (little or no exercise)</SelectItem>
@@ -365,11 +378,11 @@ export default function ClientProfile() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="medicalConditions">Medical Conditions</Label>
+              <Label htmlFor="medicalConditions">{t('profile.medicalConditions')}</Label>
               <Textarea
                 id="medicalConditions"
                 name="medicalConditions"
-                placeholder="Any medical conditions, injuries, or health concerns your trainer should know about..."
+                placeholder={t('profile.medicalConditionsPlaceholder')}
                 defaultValue={clientProfile.medicalConditions || ''}
                 disabled={!isEditing}
                 rows={2}
@@ -377,11 +390,11 @@ export default function ClientProfile() {
             </div>
 
             <div>
-              <Label htmlFor="dietaryRestrictions">Dietary Restrictions</Label>
+              <Label htmlFor="dietaryRestrictions">{t('profile.dietaryRestrictions')}</Label>
               <Textarea
                 id="dietaryRestrictions"
                 name="dietaryRestrictions"
-                placeholder="Any dietary restrictions, allergies, or preferences..."
+                placeholder={t('profile.dietaryRestrictionsPlaceholder')}
                 defaultValue={clientProfile.dietaryRestrictions || ''}
                 disabled={!isEditing}
                 rows={2}
@@ -397,18 +410,210 @@ export default function ClientProfile() {
           </CardHeader>
           <CardContent>
             {clientProfile.trainer ? (
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-medium">
-                    {clientProfile.trainer.firstName} {clientProfile.trainer.lastName}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{clientProfile.trainer.email}</p>
-                  <Badge variant="outline" className="mt-1">Personal Trainer</Badge>
-                </div>
-              </div>
+              <Dialog open={trainerDialogOpen} onOpenChange={setTrainerDialogOpen}>
+                <DialogTrigger asChild>
+                  <div 
+                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group"
+                    data-testid="trainer-info-trigger"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-medium group-hover:text-primary transition-colors">
+                        {clientProfile.trainer.firstName} {clientProfile.trainer.lastName}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">{clientProfile.trainer.email}</p>
+                      <Badge variant="outline" className="mt-1">Personal Trainer</Badge>
+                    </div>
+                    <Info className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="trainer-details-dialog">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <User className="h-5 w-5" />
+                      Trainer Details
+                    </DialogTitle>
+                  </DialogHeader>
+                  
+                  <div className="space-y-6">
+                    {/* Trainer Header */}
+                    <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-8 w-8 text-primary" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-semibold" data-testid="trainer-name">
+                          {clientProfile.trainer.firstName} {clientProfile.trainer.lastName}
+                        </h2>
+                        <p className="text-muted-foreground flex items-center gap-1" data-testid="trainer-email">
+                          <Mail className="h-4 w-4" />
+                          {clientProfile.trainer.email}
+                        </p>
+                        <Badge variant="default" className="mt-2">Certified Personal Trainer</Badge>
+                      </div>
+                    </div>
+
+                    {/* Professional Information */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Professional Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {clientProfile.trainer.expertise && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Expertise</p>
+                            <p className="font-medium" data-testid="trainer-expertise">{clientProfile.trainer.expertise}</p>
+                          </div>
+                        )}
+                        {clientProfile.trainer.experience && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Experience</p>
+                            <p className="font-medium" data-testid="trainer-experience">{clientProfile.trainer.experience}</p>
+                          </div>
+                        )}
+                      </div>
+                      {clientProfile.trainer.bio && (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground">Bio</p>
+                          <p className="text-gray-900" data-testid="trainer-bio">{clientProfile.trainer.bio}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contact Information */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">Contact Information</h3>
+                      <div className="space-y-3">
+                        {clientProfile.trainer.phone && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span data-testid="trainer-phone">{clientProfile.trainer.phone}</span>
+                          </div>
+                        )}
+                        {clientProfile.trainer.location && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <span data-testid="trainer-location">{clientProfile.trainer.location}</span>
+                          </div>
+                        )}
+                        {clientProfile.trainer.address && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Address</p>
+                            <p data-testid="trainer-address">{clientProfile.trainer.address}</p>
+                          </div>
+                        )}
+                        {clientProfile.trainer.website && (
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            <a 
+                              href={clientProfile.trainer.website} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                              data-testid="trainer-website"
+                            >
+                              {clientProfile.trainer.website}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Certifications */}
+                    {clientProfile.trainer.certifications && clientProfile.trainer.certifications.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Award className="h-5 w-5" />
+                          Certifications
+                        </h3>
+                        <div className="space-y-2">
+                          {clientProfile.trainer.certifications.map((cert: any, index: number) => (
+                            <div key={index} className="p-3 bg-muted/30 rounded-lg" data-testid={`certification-${index}`}>
+                              <p className="font-medium">{cert.name}</p>
+                              {cert.issuer && <p className="text-sm text-muted-foreground">{cert.issuer}</p>}
+                              {cert.year && <p className="text-xs text-muted-foreground">{cert.year}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specializations */}
+                    {clientProfile.trainer.specializations && clientProfile.trainer.specializations.length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Star className="h-5 w-5" />
+                          Specializations
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {clientProfile.trainer.specializations.map((spec: string, index: number) => (
+                            <Badge key={index} variant="secondary" data-testid={`specialization-${index}`}>
+                              {spec}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Social Media */}
+                    {clientProfile.trainer.socialMedia && Object.keys(clientProfile.trainer.socialMedia).length > 0 && (
+                      <div className="space-y-3">
+                        <h3 className="text-lg font-semibold">Social Media</h3>
+                        <div className="space-y-2">
+                          {clientProfile.trainer.socialMedia.instagram && (
+                            <a 
+                              href={`https://instagram.com/${clientProfile.trainer.socialMedia.instagram}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-pink-500 hover:underline"
+                              data-testid="trainer-instagram"
+                            >
+                              <Instagram className="h-4 w-4" />
+                              @{clientProfile.trainer.socialMedia.instagram}
+                            </a>
+                          )}
+                          {clientProfile.trainer.socialMedia.facebook && (
+                            <a 
+                              href={clientProfile.trainer.socialMedia.facebook}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-blue-600 hover:underline"
+                              data-testid="trainer-facebook"
+                            >
+                              <Facebook className="h-4 w-4" />
+                              Facebook
+                            </a>
+                          )}
+                          {clientProfile.trainer.socialMedia.twitter && (
+                            <a 
+                              href={`https://twitter.com/${clientProfile.trainer.socialMedia.twitter}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-blue-400 hover:underline"
+                              data-testid="trainer-twitter"
+                            >
+                              <Twitter className="h-4 w-4" />
+                              @{clientProfile.trainer.socialMedia.twitter}
+                            </a>
+                          )}
+                          {clientProfile.trainer.socialMedia.linkedin && (
+                            <a 
+                              href={clientProfile.trainer.socialMedia.linkedin}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-blue-700 hover:underline"
+                              data-testid="trainer-linkedin"
+                            >
+                              <Linkedin className="h-4 w-4" />
+                              LinkedIn
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             ) : (
               <p className="text-muted-foreground">No trainer assigned yet.</p>
             )}
@@ -459,7 +664,7 @@ export default function ClientProfile() {
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  Save Changes
+                  {t('profile.updateProfile')}
                 </>
               )}
             </Button>

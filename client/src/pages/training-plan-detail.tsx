@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from 'react-i18next';
 import { useRoute, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 export default function TrainingPlanDetail() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [match, params] = useRoute("/training-plans/:planId");
   const planId = params?.planId;
 
@@ -75,8 +77,8 @@ export default function TrainingPlanDetail() {
       <div className="min-h-screen flex items-center justify-center">
         <Card className="w-96">
           <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-            <p className="text-muted-foreground">This page is only available to trainers.</p>
+            <h2 className="text-xl font-semibold mb-2">{t('plans.accessDenied')}</h2>
+            <p className="text-muted-foreground">{t('plans.trainersOnly')}</p>
           </CardContent>
         </Card>
       </div>
@@ -88,12 +90,12 @@ export default function TrainingPlanDetail() {
       <div className="min-h-screen flex items-center justify-center">
         <Card className="w-96">
           <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-2">Error Loading Plan</h2>
-            <p className="text-muted-foreground">Failed to load training plan details.</p>
+            <h2 className="text-xl font-semibold mb-2">{t('plans.errorLoading')}</h2>
+            <p className="text-muted-foreground">{t('plans.failedToLoad')}</p>
             <Link href="/training-plans">
               <Button className="mt-4">
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Training Plans
+                {t('plans.backToTrainingPlans')}
               </Button>
             </Link>
           </CardContent>
@@ -107,12 +109,12 @@ export default function TrainingPlanDetail() {
       <div className="min-h-screen flex items-center justify-center">
         <Card className="w-96">
           <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-2">Training Plan Not Found</h2>
-            <p className="text-muted-foreground">The requested training plan could not be found.</p>
+            <h2 className="text-xl font-semibold mb-2">{t('plans.planNotFound')}</h2>
+            <p className="text-muted-foreground">{t('plans.couldNotBeFound')}</p>
             <Link href="/training-plans">
               <Button className="mt-4">
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Training Plans
+                {t('plans.backToTrainingPlans')}
               </Button>
             </Link>
           </CardContent>
@@ -144,7 +146,7 @@ export default function TrainingPlanDetail() {
           <Link href="/training-plans">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Training Plans
+              {t('plans.backToTrainingPlans')}
             </Button>
           </Link>
           <div>
@@ -154,7 +156,7 @@ export default function TrainingPlanDetail() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={plan.isActive ? "default" : "secondary"}>
-            {plan.isActive ? "Active" : "Draft"}
+            {plan.isActive ? t('plans.active') : t('plans.draft')}
           </Badge>
         </div>
       </div>
@@ -166,47 +168,47 @@ export default function TrainingPlanDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                Plan Overview
+                {t('plans.planOverview')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Duration</p>
+                  <p className="text-sm font-medium">{t('plans.duration')}</p>
                   <p className="text-sm text-muted-foreground">
-                    {plan.duration === 0 ? 'Till goal is met' : `${plan.duration} weeks`}
+                    {plan.duration === 0 ? t('plans.tillGoal') : `${plan.duration} ${t('plans.weeks')}`}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Week Cycle</p>
+                  <p className="text-sm font-medium">{t('plans.weekCycle')}</p>
                   <p className="text-sm text-muted-foreground">
-                    {plan.weekCycle || 1} week{(plan.weekCycle || 1) > 1 ? 's' : ''} pattern
+                    {plan.weekCycle || 1} {(plan.weekCycle || 1) > 1 ? t('plans.weeksPattern') : t('plans.weekPattern')}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Target className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Goal</p>
-                  <p className="text-sm text-muted-foreground">{plan.goal || 'Not specified'}</p>
+                  <p className="text-sm font-medium">{t('plans.goal')}</p>
+                  <p className="text-sm text-muted-foreground">{plan.goal || t('plans.notSpecified')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <Play className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm font-medium">Exercises</p>
-                  <p className="text-sm text-muted-foreground">{plan.planExercises?.length || 0} exercises</p>
+                  <p className="text-sm font-medium">{t('plans.exercises')}</p>
+                  <p className="text-sm text-muted-foreground">{plan.planExercises?.length || 0} {t('plans.exercises').toLowerCase()}</p>
                 </div>
               </div>
               {plan.createdAt && (
                 <div className="flex items-center gap-3">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Created</p>
+                    <p className="text-sm font-medium">{t('plans.created')}</p>
                     <p className="text-sm text-muted-foreground">
                       {new Date(plan.createdAt).toLocaleDateString()}
                     </p>
@@ -219,13 +221,13 @@ export default function TrainingPlanDetail() {
                 <>
                   <Separator />
                   <div className="space-y-3">
-                    <h4 className="font-medium">Nutrition Guidelines</h4>
+                    <h4 className="font-medium">{t('plans.nutritionGuidelines')}</h4>
                     {plan.dailyCalories && (
                       <div className="flex items-center gap-3">
                         <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                         <div>
-                          <p className="text-sm font-medium">Daily Calories</p>
-                          <p className="text-sm text-muted-foreground">{plan.dailyCalories} kcal</p>
+                          <p className="text-sm font-medium">{t('plans.dailyCalories')}</p>
+                          <p className="text-sm text-muted-foreground">{plan.dailyCalories} {t('plans.kcal')}</p>
                         </div>
                       </div>
                     )}
@@ -233,7 +235,7 @@ export default function TrainingPlanDetail() {
                       <div className="flex items-center gap-3">
                         <div className="h-2 w-2 bg-green-500 rounded-full"></div>
                         <div>
-                          <p className="text-sm font-medium">Protein</p>
+                          <p className="text-sm font-medium">{t('plans.protein')}</p>
                           <p className="text-sm text-muted-foreground">{plan.protein}g</p>
                         </div>
                       </div>
@@ -242,7 +244,7 @@ export default function TrainingPlanDetail() {
                       <div className="flex items-center gap-3">
                         <div className="h-2 w-2 bg-orange-500 rounded-full"></div>
                         <div>
-                          <p className="text-sm font-medium">Carbohydrates</p>
+                          <p className="text-sm font-medium">{t('plans.carbohydrates')}</p>
                           <p className="text-sm text-muted-foreground">{plan.carbs}g</p>
                         </div>
                       </div>
@@ -260,7 +262,7 @@ export default function TrainingPlanDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Play className="h-5 w-5" />
-                Exercise Details
+                {t('plans.exerciseDetails')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -295,39 +297,39 @@ export default function TrainingPlanDetail() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {planExercise.sets && (
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">Sets:</span>
+                              <span className="text-sm font-medium">{t('plans.sets')}</span>
                               <span className="text-sm">{planExercise.sets}</span>
                             </div>
                           )}
                           {planExercise.reps && (
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">Reps:</span>
+                              <span className="text-sm font-medium">{t('plans.reps')}</span>
                               <span className="text-sm">{planExercise.reps}</span>
                             </div>
                           )}
                           {planExercise.duration && (
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">Duration:</span>
-                              <span className="text-sm">{planExercise.duration} min</span>
+                              <span className="text-sm font-medium">{t('plans.duration')}:</span>
+                              <span className="text-sm">{planExercise.duration} {t('plans.min')}</span>
                             </div>
                           )}
                           {planExercise.weight && (
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">Weight:</span>
-                              <span className="text-sm">{planExercise.weight} kg</span>
+                              <span className="text-sm font-medium">{t('plans.weight')}</span>
+                              <span className="text-sm">{planExercise.weight} {t('plans.kg')}</span>
                             </div>
                           )}
                           {planExercise.restTime && (
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">Rest:</span>
-                              <span className="text-sm">{planExercise.restTime} sec</span>
+                              <span className="text-sm font-medium">{t('plans.rest')}</span>
+                              <span className="text-sm">{planExercise.restTime} {t('plans.sec')}</span>
                             </div>
                           )}
                         </div>
                         
                         {planExercise.notes && (
                           <div className="mt-3 pt-3 border-t">
-                            <h4 className="text-sm font-medium mb-2">Notes:</h4>
+                            <h4 className="text-sm font-medium mb-2">{t('plans.notes')}</h4>
                             <p className="text-sm text-muted-foreground">{planExercise.notes}</p>
                           </div>
                         )}
@@ -354,7 +356,7 @@ export default function TrainingPlanDetail() {
 
                         {(exercise?.mediaUrl || exercise?.mediaURL) && (
                           <div className="mt-3 pt-3 border-t">
-                            <h4 className="text-sm font-medium mb-2">Exercise Media:</h4>
+                            <h4 className="text-sm font-medium mb-2">{t('plans.exerciseMedia')}</h4>
                             {exercise.mediaType === 'video' ? (
                               <video 
                                 src={exercise.mediaUrl || exercise.mediaURL} 
